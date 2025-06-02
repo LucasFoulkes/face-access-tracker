@@ -22,6 +22,13 @@ interface Registro {
     hora: string;
 }
 
+interface FaceData {
+    id: number;
+    usuarioId: number;
+    descriptor: Float32Array; // 128-dimensional face descriptor from face-api.js
+    fechaRegistro: Date;
+}
+
 export const db = new Dexie('TimeAttendanceDatabase') as Dexie & {
     usuarios: EntityTable<
         Usuario,
@@ -35,13 +42,31 @@ export const db = new Dexie('TimeAttendanceDatabase') as Dexie & {
         Registro,
         'id' // primary key "id" (for the typings only)
     >;
+    faceData: EntityTable<
+        FaceData,
+        'id' // primary key "id" (for the typings only)
+    >;
 };
 
 // Schema declaration:
+// Version 1: Original tables
 db.version(1).stores({
-    usuarios: '++id, codigo, cedula, apellidos, nombres, pin', // primary key "id" (for the runtime!)
-    admin: '++id, usuarioId, fechaCreacion', // primary key "id" (for the runtime!)
-    registros: '++id, usuarioId, fecha, hora' // primary key "id" (for the runtime!)
+    usuarios: '++id, codigo, cedula, apellidos, nombres, pin',
+    admin: '++id, usuarioId, fechaCreacion',
+    registros: '++id, usuarioId, fecha, hora'
+});
+
+// Version 2: Add faceData table
+db.version(2).stores({
+    usuarios: '++id, codigo, cedula, apellidos, nombres, pin',
+    admin: '++id, usuarioId, fechaCreacion',
+    registros: '++id, usuarioId, fecha, hora',
+    faceData: '++id, usuarioId, fechaRegistro' // New table added in version 2
+}).upgrade(tx => {
+    // Upgrade function - this runs when upgrading from version 1 to 2
+    console.log('Upgrading database to version 2, adding faceData table');
+    // The table is automatically created by Dexie when we define it in stores()
+    return Promise.resolve();
 });
 
 db.on('populate', async () => {
@@ -60,4 +85,4 @@ db.on('populate', async () => {
     });
 });
 
-export type { Usuario, Admin, Registro };
+export type { Usuario, Admin, Registro, FaceData };
