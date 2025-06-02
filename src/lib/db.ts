@@ -46,10 +46,10 @@ db.version(1).stores({
 
 db.on('populate', async () => {
     const userId = await db.usuarios.add({
-        codigo: '001',
-        cedula: '11111111111',
-        apellidos: 'Foulkes Arroyo',
-        nombres: 'Lucas Gabriel',
+        codigo: '00000',
+        cedula: '0123456789',
+        apellidos: 'admin',
+        nombres: 'admin',
         pin: '7714'
     });
 
