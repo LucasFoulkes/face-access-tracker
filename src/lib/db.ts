@@ -62,7 +62,7 @@ db.version(2).stores({
     admin: '++id, usuarioId, fechaCreacion',
     registros: '++id, usuarioId, fecha, hora',
     faceData: '++id, usuarioId, fechaRegistro' // New table added in version 2
-}).upgrade(tx => {
+}).upgrade(_tx => {
     // Upgrade function - this runs when upgrading from version 1 to 2
     console.log('Upgrading database to version 2, adding faceData table');
     // The table is automatically created by Dexie when we define it in stores()

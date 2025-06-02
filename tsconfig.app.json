@@ -33,6 +33,10 @@
     }
   },
   "include": [
-    "src"
+    "src",
+    "vite.config.ts"
+  ],
+  "types": [
+    "vite-plugin-pwa/client"
   ]
 }
