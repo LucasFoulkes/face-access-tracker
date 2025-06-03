@@ -16,57 +16,30 @@ interface OTPLoginProps {
 
 function OTPLogin({ maxLength, fieldType }: OTPLoginProps) {
     const navigate = useNavigate();
-    const [value, setValue] = useState("");
-
-    // Query the database to find a user with the matching field value
+    const [value, setValue] = useState("");    // Query the database to find a user with the matching field value
     const matchingUser = useLiveQuery(
         async () => {
             if (value.length === maxLength) {
-                const user = await db.usuarios
-                    .where(fieldType)
-                    .equals(value)
-                    .first();
-                return user;
+                return await db.usuarios.where(fieldType).equals(value).first();
             }
             return null;
         },
         [value, fieldType, maxLength]
-    );    // Update validation status when user is found
+    );
+
+    // Handle auto-navigation and auto-clear
     useEffect(() => {
-        // Auto-navigate if correct input (reached max length and found match)
-        if (value.length === maxLength && matchingUser) {
+        if (value.length !== maxLength) return;
+
+        if (matchingUser) {
             navigate("/confirmation", {
-                state: {
-                    userId: matchingUser.id,
-                    authMethod: fieldType,
-                    authValue: value
-                }
+                state: { userId: matchingUser.id, authMethod: fieldType, authValue: value }
             });
-        }
-
-        // Auto-clear if wrong input (reached max length but no match)
-        if (value.length === maxLength && !matchingUser) {
-            const timer = setTimeout(() => {
-                setValue("");
-            }, 1000); // Clear after 1 second
-
+        } else {
+            const timer = setTimeout(() => setValue(""), 1000);
             return () => clearTimeout(timer);
         }
     }, [matchingUser, value.length, maxLength, navigate, fieldType, value]);
-
-    const handleButtonClick = () => {
-        if (value.length > 0) {
-            // Just clear the input
-            setValue("");
-        } else {
-            navigate("/");
-        }
-    };
-
-    const getButtonText = () => {
-        if (value.length === 0) return "regresar";
-        return "borrar";
-    };
 
     return (
         <div className="flex items-center justify-center min-h-screen">
@@ -75,14 +48,15 @@ function OTPLogin({ maxLength, fieldType }: OTPLoginProps) {
                     <InputOTPGroup>
                         {[...Array(maxLength)].map((_, i) => (
                             <InputOTPSlot key={i} index={i} />
-                        ))}                    </InputOTPGroup>
+                        ))}
+                    </InputOTPGroup>
                 </InputOTP>
                 <Button
                     className="uppercase w-full min-w-0"
                     style={{ width: 'min(100%, 10rem)' }}
-                    onClick={handleButtonClick}
+                    onClick={() => value.length > 0 ? setValue("") : navigate("/")}
                 >
-                    {getButtonText()}
+                    {value.length === 0 ? "regresar" : "borrar"}
                 </Button>
             </div>
         </div>

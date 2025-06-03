@@ -5,6 +5,7 @@ import PinLogin from "./pages/PinLogin";
 import CedulaLogin from "./pages/CedulaLogin";
 import Confirmation from "./pages/Confirmation";
 import AdminPage from "./pages/AdminPage";
+import "./App.css";
 
 function App() {
   return (

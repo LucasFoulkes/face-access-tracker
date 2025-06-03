@@ -17,12 +17,10 @@ function HomePage() {
     }
 
     return (
-        <div className="flex flex-col gap-4 items-center justify-center min-h-screen">
-            <div className="flex flex-row gap-4">
-                {loginButton("facial", "/facial")}
-                {loginButton("pin", "/pin")}
-                {loginButton("cedula", "/cedula")}
-            </div>
+        <div className="flex flex-row gap-4">
+            {loginButton("facial", "/facial")}
+            {loginButton("pin", "/pin")}
+            {loginButton("cedula", "/cedula")}
         </div>
     )
 }

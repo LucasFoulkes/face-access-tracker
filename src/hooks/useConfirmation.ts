@@ -5,8 +5,8 @@ import { useState } from "react";
 
 interface LocationState {
     userId: number;
-    authMethod: 'cedula' | 'pin';
     authValue: string;
+    authMethod?: 'pin' | 'cedula' | string;
 }
 
 export function useConfirmation(state: LocationState | null) {
@@ -24,40 +24,6 @@ export function useConfirmation(state: LocationState | null) {
         [state?.userId]
     );
 
-    // Create attendance record
-    const createAttendanceRecord = async (userId: number): Promise<boolean> => {
-        try {
-            await db.registros.add({
-                usuarioId: userId,
-                fecha: new Date(),
-                hora: new Date().toLocaleTimeString('es-ES', {
-                    hour12: false,
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit'
-                })
-            });
-            return true;
-        } catch (error) {
-            console.error('Error al guardar el registro:', error);
-            return false;
-        }
-    };
-
-    // Check if user is admin
-    const checkAdminStatus = async (userId: number): Promise<boolean> => {
-        try {
-            const adminRecord = await db.admin
-                .where('usuarioId')
-                .equals(userId)
-                .first();
-            return !!adminRecord;
-        } catch (error) {
-            console.error('Error checking admin status:', error);
-            return false;
-        }
-    };
-
     // Handle confirmation process
     const handleConfirmation = async () => {
         if (!state?.userId || isProcessing) return;
@@ -66,27 +32,25 @@ export function useConfirmation(state: LocationState | null) {
 
         try {
             // Create attendance record
-            const recordCreated = await createAttendanceRecord(state.userId);
-
-            if (!recordCreated) {
-                console.error('Failed to create attendance record');
-                // Still continue with navigation even if record creation fails
-            }
-
-            // Check admin status and navigate accordingly
-            const isAdmin = await checkAdminStatus(state.userId);
-
-            if (isAdmin) {
-                navigate("/admin", {
-                    state: {
-                        userId: state.userId,
-                        authMethod: state.authMethod,
-                        authValue: state.authValue
-                    }
+            try {
+                await db.registros.add({
+                    usuarioId: state.userId,
+                    fecha: new Date(),
+                    hora: new Date().toLocaleTimeString('es-ES', {
+                        hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'
+                    })
                 });
-            } else {
-                navigate("/");
+            } catch (e) {
+                console.error('Error al guardar el registro:', e);
+                // Continue despite record creation failure
             }
+
+            // Check admin status and navigate
+            const isAdmin = !!(await db.admin.where('usuarioId').equals(state.userId).first());
+            navigate(isAdmin ? "/admin" : "/", isAdmin ? {
+                state: { userId: state.userId, authValue: state.authValue }
+            } : undefined);
+
         } catch (error) {
             console.error('Error during confirmation process:', error);
             navigate("/");
@@ -95,30 +59,12 @@ export function useConfirmation(state: LocationState | null) {
         }
     };
 
-    // Handle retry - go back to specific login method
-    const handleRetry = () => {
-        if (state?.authMethod === 'pin') {
-            navigate("/pin");
-        } else if (state?.authMethod === 'cedula') {
-            navigate("/cedula");
-        } else {
-            navigate("/");
-        }
-    };
-
-    // Redirect if no valid state
-    const redirectIfInvalid = () => {
-        if (!state?.userId) {
-            navigate("/");
-        }
-    };
-
     return {
         user,
         isProcessing,
         handleConfirmation,
-        handleRetry,
-        redirectIfInvalid,
+        handleRetry: () => navigate(state?.authMethod ? `/${state.authMethod}` : "/"),
+        redirectIfInvalid: () => { if (!state?.userId) navigate("/"); },
         isLoading: !user && !!state?.userId
     };
 }
