@@ -5,12 +5,10 @@ import PinLogin from "./pages/PinLogin";
 import CedulaLogin from "./pages/CedulaLogin";
 import Confirmation from "./pages/Confirmation";
 import AdminPage from "./pages/AdminPage";
-import { PWAInstallPrompt } from "./components/PWAInstallPrompt";
 
 function App() {
   return (
     <>
-      <PWAInstallPrompt />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/facial" element={<FacialLogin />} />

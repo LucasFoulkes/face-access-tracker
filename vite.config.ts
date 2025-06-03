@@ -41,11 +41,15 @@ export default defineConfig({
           }
         ]
       },
+      // Disable PWA in development to avoid warnings
       devOptions: {
         enabled: true
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globIgnores: ['**/node_modules/**/*', 'sw.js', 'workbox-*.js'],
+        /* Skip precaching in development to avoid warnings */
+        mode: process.env.NODE_ENV === 'development' ? 'development' : 'production',
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
