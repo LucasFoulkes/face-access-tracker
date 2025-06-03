@@ -31,11 +31,11 @@ function AdminPage() {
             </Button>
         </>
     ); return (
-        <div className="flex flex-col h-screen ">
-            <Button onClick={() => navigate('/')} className="uppercase w-fit mb-4 flex items-center gap-2">
+        <div className="flex flex-col h-screen p-4">
+            <Button onClick={() => navigate('/')} className="uppercase w-fit flex items-center gap-2">
                 <ChevronLeft /> <span>Regresar</span>
             </Button>
-            <Tabs defaultValue="account" className="w-full items-center">
+            <Tabs defaultValue="registros" className="w-full items-center">
                 <TabsList>
                     <TabsTrigger className="uppercase" value="usuarios">{db.usuarios.name}</TabsTrigger>
                     <TabsTrigger className="uppercase" value="registros">{db.registros.name}</TabsTrigger>
@@ -43,7 +43,9 @@ function AdminPage() {
                 <TabsContent value="usuarios">
                     <DataTable data={usuariosData} actions={usuariosActions} />
                 </TabsContent>
-                <TabsContent value="registros" ><DataTable data={registrosData} /></TabsContent>
+                <TabsContent value="registros" >
+                    <DataTable data={registrosData} />
+                </TabsContent>
             </Tabs>
         </div >
     );
