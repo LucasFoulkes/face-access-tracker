@@ -4,7 +4,7 @@ import DataTable from "@/components/DataTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Upload, Loader2 } from "lucide-react";
+import { Upload, Loader2, ChevronLeft } from "lucide-react";
 import { useRef } from "react";
 import { useImportExcel } from "@/hooks/useImportExcel";
 
@@ -13,7 +13,7 @@ function AdminPage() {
     const registros = useLiveQuery(() => db.registros.toArray());
     const navigate = useNavigate();
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { importUsuarios, isImporting, validationErrors } = useImportExcel();
+    const { importUsuarios, isImporting } = useImportExcel();
 
     const usuariosData = usuarios ? Object.assign(usuarios, { _tableName: db.usuarios.name }) : [];
     const registrosData = registros ? Object.assign(registros, { _tableName: db.registros.name }) : [];
@@ -31,27 +31,21 @@ function AdminPage() {
             </Button>
         </>
     ); return (
-        <div>
-            <Button onClick={() => navigate('/')} className="uppercase w-fit">regresar</Button>
-            <Tabs defaultValue="account" className="w-fit items-center">
+        <div className="flex flex-col h-screen ">
+            <Button onClick={() => navigate('/')} className="uppercase w-fit mb-4 flex items-center gap-2">
+                <ChevronLeft /> <span>Regresar</span>
+            </Button>
+            <Tabs defaultValue="account" className="w-full items-center">
                 <TabsList>
-                    <TabsTrigger className="uppercase" value="account">{db.usuarios.name}</TabsTrigger>
-                    <TabsTrigger className="uppercase" value="password">{db.registros.name}</TabsTrigger>
+                    <TabsTrigger className="uppercase" value="usuarios">{db.usuarios.name}</TabsTrigger>
+                    <TabsTrigger className="uppercase" value="registros">{db.registros.name}</TabsTrigger>
                 </TabsList>
-                <TabsContent value="account">
-                    {validationErrors.length > 0 && (
-                        <div className="bg-red-50 border border-red-200 text-red-800 rounded-md p-4 mb-4">
-                            <h4 className="text-sm font-semibold mb-2">Errores de validación:</h4>
-                            <ul className="text-xs list-disc pl-5">
-                                {validationErrors.map((error, index) => <li key={index}>Fila {error.row}: {error.field} - {error.message}</li>)}
-                            </ul>
-                        </div>
-                    )}
+                <TabsContent value="usuarios">
                     <DataTable data={usuariosData} actions={usuariosActions} />
                 </TabsContent>
-                <TabsContent value="password"><DataTable data={registrosData} /></TabsContent>
+                <TabsContent value="registros" ><DataTable data={registrosData} /></TabsContent>
             </Tabs>
-        </div>
+        </div >
     );
 }
 

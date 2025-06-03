@@ -7,9 +7,9 @@ function HomePage() {
     function loginButton(text: string, route: string) {
         return (
             <Button
-                className='w-40 h-40 uppercase text-lg p-0'
-                size="lg"
+                className='size-48 uppercase text-xl'
                 onClick={() => navigate(route)}
+                variant='outline'
             >
                 {text}
             </Button>
@@ -17,7 +17,7 @@ function HomePage() {
     }
 
     return (
-        <div className="flex flex-row gap-4">
+        <div className="flex flex-row gap-16">
             {loginButton("facial", "/facial")}
             {loginButton("pin", "/pin")}
             {loginButton("cedula", "/cedula")}

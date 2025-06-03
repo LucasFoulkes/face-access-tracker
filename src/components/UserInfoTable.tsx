@@ -7,7 +7,7 @@ interface UserInfoTableProps {
 
 export function UserInfoTable({ user }: UserInfoTableProps) {
     return (
-        <Table>
+        <Table className="w-lg">
             <TableBody>
                 {Object.entries(user).map(([key, value]) => (
                     <TableRow key={key}>
