@@ -50,6 +50,7 @@ function Confirmation() {
                                     onClick={handleConfirmation}
                                     disabled={isProcessing}
                                 >
+
                                     {isProcessing ? 'Procesando...' : 'confirmar'}
                                 </Button>
                             </KeyIndicator>
