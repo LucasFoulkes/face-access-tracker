@@ -35,10 +35,21 @@ function Confirmation() {
             className="flex items-center justify-center min-h-screen"
             tabIndex={0}
             style={{ outline: 'none' }}
-        >
-            <Card className="uppercase shadow-none">
+        >            <Card className="uppercase shadow-none">
                 <CardContent>
-                    <UserInfoTable user={user} />                    <div className="flex gap-4 mt-4">
+                    {/* Show face registration indicator */}
+                    {state?.isRegistration && (
+                        <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg">
+                            <p className="text-blue-800 font-semibold text-center">
+                                🔒 Registrando Rostro
+                            </p>
+                            <p className="text-blue-600 text-sm text-center mt-1">
+                                Tu rostro será asociado a tu cuenta
+                            </p>
+                        </div>
+                    )}
+
+                    <UserInfoTable user={user} /><div className="flex gap-4 mt-4">
                         <div className="flex-1">
                             <KeyIndicator
                                 keyLabel="⏎"

@@ -6,7 +6,9 @@ import { useState } from "react";
 interface LocationState {
     userId: number;
     authValue: string;
-    authMethod?: 'pin' | 'cedula' | string;
+    authMethod?: 'pin' | 'cedula' | 'facial' | string;
+    faceDescriptor?: number[]; // Face descriptor for registration
+    isRegistration?: boolean; // Flag to indicate face registration
 }
 
 export function useConfirmation(state: LocationState | null) {
@@ -22,15 +24,30 @@ export function useConfirmation(state: LocationState | null) {
             return null;
         },
         [state?.userId]
-    );
-
-    // Handle confirmation process
+    );    // Handle confirmation process
     const handleConfirmation = async () => {
         if (!state?.userId || isProcessing) return;
 
         setIsProcessing(true);
 
         try {
+            // Handle face registration if needed
+            if (state.isRegistration && state.faceDescriptor) {
+                try {
+                    // Convert array back to Float32Array and save to faceData table
+                    const descriptorArray = new Float32Array(state.faceDescriptor);
+                    await db.faceData.add({
+                        usuarioId: state.userId,
+                        descriptor: descriptorArray,
+                        fechaRegistro: new Date()
+                    });
+                    console.log(`Face data registered for user ${state.userId}`);
+                } catch (e) {
+                    console.error('Error saving face data:', e);
+                    // Continue despite face registration failure
+                }
+            }
+
             // Create attendance record
             try {
                 await db.registros.add({
@@ -57,13 +74,24 @@ export function useConfirmation(state: LocationState | null) {
         } finally {
             setIsProcessing(false);
         }
-    };
-
-    return {
+    }; return {
         user,
         isProcessing,
         handleConfirmation,
-        handleRetry: () => navigate(state?.authMethod ? `/${state.authMethod}` : "/"),
+        handleRetry: () => {
+            if (state?.isRegistration) {
+                // Go back to the appropriate auth method with face registration data
+                navigate(`/${state.authMethod}`, {
+                    state: {
+                        faceDescriptor: state.faceDescriptor,
+                        isRegistration: true
+                    }
+                });
+            } else {
+                // Normal flow - go back to auth method or home
+                navigate(state?.authMethod ? `/${state.authMethod}` : "/");
+            }
+        },
         redirectIfInvalid: () => { if (!state?.userId) navigate("/"); },
         isLoading: !user && !!state?.userId
     };

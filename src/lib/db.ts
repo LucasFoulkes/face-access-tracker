@@ -49,24 +49,11 @@ export const db = new Dexie('TimeAttendanceDatabase') as Dexie & {
 };
 
 // Schema declaration:
-// Version 1: Original tables
 db.version(1).stores({
     usuarios: '++id, codigo, cedula, apellidos, nombres, pin',
     admin: '++id, usuarioId, fechaCreacion',
-    registros: '++id, usuarioId, fecha, hora'
-});
-
-// Version 2: Add faceData table
-db.version(2).stores({
-    usuarios: '++id, codigo, cedula, apellidos, nombres, pin',
-    admin: '++id, usuarioId, fechaCreacion',
     registros: '++id, usuarioId, fecha, hora',
-    faceData: '++id, usuarioId, fechaRegistro' // New table added in version 2
-}).upgrade(_tx => {
-    // Upgrade function - this runs when upgrading from version 1 to 2
-    console.log('Upgrading database to version 2, adding faceData table');
-    // The table is automatically created by Dexie when we define it in stores()
-    return Promise.resolve();
+    faceData: '++id, usuarioId, fechaRegistro'
 });
 
 db.on('populate', async () => {
