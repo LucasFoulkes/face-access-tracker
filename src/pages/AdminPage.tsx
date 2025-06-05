@@ -2,6 +2,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import DataTable from "@/components/DataTable";
 import UsuariosCRUD from "@/components/UsuariosCRUD";
+import RegistrosTable from "@/components/RegistrosTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -59,9 +60,8 @@ function AdminPage() {
                     <TabsTrigger className="uppercase" value="faceData">{db.faceData.name}</TabsTrigger>
                 </TabsList>                <TabsContent value="usuarios">
                     <UsuariosCRUD importActions={usuariosImportActions} />
-                </TabsContent>
-                <TabsContent value="registros">
-                    <DataTable data={registrosData} />
+                </TabsContent>                <TabsContent value="registros">
+                    <RegistrosTable data={registrosData} />
                 </TabsContent>
                 <TabsContent value="admin">
                     <DataTable data={adminData} />
