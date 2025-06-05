@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import DataTable from "@/components/DataTable";
+import UsuariosCRUD from "@/components/UsuariosCRUD";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,13 +10,13 @@ import { useRef } from "react";
 import { useImportExcel } from "@/hooks/useImportExcel";
 
 function AdminPage() {
-    const usuarios = useLiveQuery(() => db.usuarios.toArray());
     const registros = useLiveQuery(() => db.registros.toArray());
     const admin = useLiveQuery(() => db.admin.toArray());
     const faceData = useLiveQuery(() => db.faceData.toArray());
     const navigate = useNavigate();
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const { importUsuarios, isImporting } = useImportExcel(); const usuariosData = usuarios ? Object.assign(usuarios, { _tableName: db.usuarios.name }) : [];
+    const { importUsuarios, isImporting } = useImportExcel();
+
     const registrosData = registros ? Object.assign(registros, { _tableName: db.registros.name }) : [];
     const adminData = admin ? Object.assign(admin, { _tableName: db.admin.name }) : [];
 
@@ -37,7 +38,9 @@ function AdminPage() {
         if (!file) return;
         alert((await importUsuarios(file)).message);
         event.target.value = '';
-    }; const usuariosActions = (
+    };
+
+    const usuariosImportActions = (
         <>
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx,.xls" style={{ display: 'none' }} />
             <Button onClick={() => fileInputRef.current?.click()} className="uppercase bg-blue-500 hover:bg-blue-600" disabled={isImporting}>
@@ -54,9 +57,8 @@ function AdminPage() {
                     <TabsTrigger className="uppercase" value="registros">{db.registros.name}</TabsTrigger>
                     <TabsTrigger className="uppercase" value="admin">{db.admin.name}</TabsTrigger>
                     <TabsTrigger className="uppercase" value="faceData">{db.faceData.name}</TabsTrigger>
-                </TabsList>
-                <TabsContent value="usuarios">
-                    <DataTable data={usuariosData} actions={usuariosActions} />
+                </TabsList>                <TabsContent value="usuarios">
+                    <UsuariosCRUD importActions={usuariosImportActions} />
                 </TabsContent>
                 <TabsContent value="registros">
                     <DataTable data={registrosData} />
