@@ -15,16 +15,47 @@ export default function ReportsSection() {
     const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-    const [showExportMenu, setShowExportMenu] = useState(false);
+    const [showExportMenu, setShowExportMenu] = useState(false); const { exportData, isExporting } = useExport();
 
-    const { exportData, isExporting } = useExport();
+    // Format price function to convert from cents to currency format
+    const formatPrice = (price: number) => {
+        return new Intl.NumberFormat('es-CO', {
+            style: 'currency',
+            currency: 'COP',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(price / 100);
+    };
 
     const registros = useLiveQuery(() => db.registros.toArray());
-    const usuarios = useLiveQuery(() => db.usuarios.toArray()); const reportData = useMemo(() => {
-        if (!registros || !usuarios) return [];
+    const usuarios = useLiveQuery(() => db.usuarios.toArray());
+    const menus = useLiveQuery(() => db.menus.toArray()); const reportData = useMemo(() => {
+        if (!registros || !usuarios || !menus) return [];
 
         // Create a map for quick usuario lookup
         const usuarioMap = new Map(usuarios.map(u => [u.id, `${u.nombres} ${u.apellidos}`]));
+
+        // Function to match meal time with menu
+        const matchMenuByTime = (hora: string) => {
+            // Convert time string to minutes for comparison
+            const [hours, minutes] = hora.split(':').map(Number);
+            const totalMinutes = hours * 60 + minutes;
+
+            // Find matching menu based on time range
+            for (const menu of menus) {
+                const [startTime, endTime] = menu.timeRange.split(' - ');
+                const [startHours, startMinutes] = startTime.split(':').map(Number);
+                const [endHours, endMinutes] = endTime.split(':').map(Number);
+
+                const startTotalMinutes = startHours * 60 + startMinutes;
+                const endTotalMinutes = endHours * 60 + endMinutes;
+
+                if (totalMinutes >= startTotalMinutes && totalMinutes <= endTotalMinutes) {
+                    return menu;
+                }
+            }
+            return null;
+        };
 
         let filteredRegistros = registros;
 
@@ -51,36 +82,71 @@ export default function ReportsSection() {
                 break;
         }
 
-        // Transform to meal report format
-        return filteredRegistros.map(registro => ({
-            id: registro.id,
-            usuarioId: registro.usuarioId,
-            usuario: usuarioMap.get(registro.usuarioId) || `Usuario ${registro.usuarioId}`,
-            fecha: registro.fecha instanceof Date ? registro.fecha.toLocaleDateString() : new Date(registro.fecha).toLocaleDateString(),
-            hora: registro.hora,
-            timestamp: registro.fecha instanceof Date ? registro.fecha : new Date(registro.fecha)
-        })).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-    }, [registros, usuarios, activeTab, selectedDate, selectedMonth, startDate, endDate]);
+        // Transform to meal report format with menu correlation
+        return filteredRegistros.map(registro => {
+            const menu = matchMenuByTime(registro.hora);
+            return {
+                id: registro.id,
+                usuarioId: registro.usuarioId,
+                usuario: usuarioMap.get(registro.usuarioId) || `Usuario ${registro.usuarioId}`,
+                fecha: registro.fecha instanceof Date ? registro.fecha.toLocaleDateString() : new Date(registro.fecha).toLocaleDateString(),
+                hora: registro.hora,
+                menu: menu?.name || 'Sin menú',
+                precio: menu?.price || 0,
+                timestamp: registro.fecha instanceof Date ? registro.fecha : new Date(registro.fecha)
+            };
+        }).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    }, [registros, usuarios, menus, activeTab, selectedDate, selectedMonth, startDate, endDate]);
 
     const totalMeals = reportData.length;
+    const totalCost = reportData.reduce((sum, record) => sum + record.precio, 0);
+
+    // Calculate menu statistics
+    const menuStats = useMemo(() => {
+        const stats = new Map();
+        reportData.forEach(record => {
+            const menuName = record.menu;
+            if (!stats.has(menuName)) {
+                stats.set(menuName, { count: 0, totalCost: 0, price: record.precio });
+            }
+            const current = stats.get(menuName);
+            current.count += 1;
+            current.totalCost += record.precio;
+        });
+        return Array.from(stats.entries()).map(([name, data]) => ({
+            name,
+            count: data.count,
+            totalCost: data.totalCost,
+            unitPrice: data.price
+        }));
+    }, [reportData]);
 
     const handleExport = async (format: ExportFormat) => {
         setShowExportMenu(false);
         if (!reportData.length) {
             alert('No hay datos para exportar');
             return;
-        }
-
-        const exportColumns = ['id', 'usuario', 'fecha', 'hora'];
+        } const exportColumns = ['id', 'usuario', 'fecha', 'hora', 'menu', 'precio'];
         const exportWithSummary = [
             ...reportData.map(r => ({
                 id: r.id,
                 usuario: r.usuario,
                 fecha: r.fecha,
-                hora: r.hora
+                hora: r.hora,
+                menu: r.menu,
+                precio: r.precio
             })),
+            {}, { id: '', usuario: 'TOTAL COMIDAS', fecha: '', hora: totalMeals.toString(), menu: '', precio: '' },
+            { id: '', usuario: 'COSTO TOTAL', fecha: '', hora: '', menu: '', precio: formatPrice(totalCost) },
             {},
-            { id: '', usuario: 'TOTAL COMIDAS', fecha: '', hora: totalMeals.toString() }
+            ...menuStats.map(stat => ({
+                id: '',
+                usuario: `${stat.name}`,
+                fecha: `${stat.count} comidas`,
+                hora: `${formatPrice(stat.unitPrice)} c/u`,
+                menu: `Total: ${formatPrice(stat.totalCost)}`,
+                precio: ''
+            }))
         ];
 
         const reportTitle = getReportTitle();
@@ -210,22 +276,47 @@ export default function ReportsSection() {
 
                         <CardHeader>
                             <h3 className="text-xl font-bold uppercase">Resumen</h3>
-                        </CardHeader>
-                        
-                        <CardContent className="space-y-6">
+                        </CardHeader>                        <CardContent className="space-y-6">
                             {/* Date Range */}
                             <div>
                                 <p className="text-sm font-medium text-gray-600 mb-1">Período</p>
                                 <p className="text-base font-semibold">
                                     {getReportTitle().replace('Reporte de Comidas - ', '')}
                                 </p>
+                            </div>                            {/* Main Totals */}
+                            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="text-center">
+                                        <p className="text-3xl font-bold text-emerald-600 mb-1">{totalMeals}</p>
+                                        <p className="text-sm font-semibold text-emerald-800">Total de Comidas</p>
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-2xl font-bold text-emerald-700 mb-1">{formatPrice(totalCost)}</p>
+                                        <p className="text-sm font-semibold text-emerald-800">Costo Total</p>
+                                    </div>
+                                </div>
                             </div>
 
-                            {/* Main Count */}
-                            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-6 text-center">
-                                <p className="text-5xl font-bold text-emerald-600 mb-2">{totalMeals}</p>
-                                <p className="text-lg font-semibold text-emerald-800">Total de Comidas</p>
-                            </div>
+                            {/* Per-Menu Statistics */}
+                            {menuStats.length > 0 && (
+                                <div className="space-y-2">
+                                    <p className="text-sm font-medium text-gray-600">Detalle por Menú</p>
+                                    <div className="space-y-2 max-h-40 overflow-y-auto">                                        {menuStats.map((stat) => (
+                                        <div key={stat.name} className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">                                                <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                                <p className="font-medium text-sm">{stat.name}</p>
+                                                <p className="text-xs text-gray-500">{formatPrice(stat.unitPrice)} c/u</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-bold text-sm">{stat.count}</p>
+                                                <p className="text-xs font-semibold text-emerald-600">{formatPrice(stat.totalCost)}</p>
+                                            </div>
+                                        </div>
+                                        </div>
+                                    ))}
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 )}
@@ -235,27 +326,38 @@ export default function ReportsSection() {
                     <h3 className="text-lg font-semibold uppercase">Detalle</h3>
                 </CardHeader>
                 <CardContent className="p-0 flex-1 min-h-0">
-                    <div className="overflow-auto h-full">
-                        <table className="w-full text-sm">
-                            <thead className="sticky top-0 bg-white border-b">
-                                <tr>
-                                    <th className="px-4 py-3 text-left font-medium">ID</th>
-                                    <th className="px-4 py-3 text-left font-medium">Usuario</th>
-                                    <th className="px-4 py-3 text-left font-medium">Fecha</th>
-                                    <th className="px-4 py-3 text-left font-medium">Hora</th>
+                    <div className="overflow-auto h-full">                        <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-white border-b">
+                            <tr>
+                                <th className="px-4 py-3 text-left font-medium">ID</th>
+                                <th className="px-4 py-3 text-left font-medium">Usuario</th>
+                                <th className="px-4 py-3 text-left font-medium">Fecha</th>
+                                <th className="px-4 py-3 text-left font-medium">Hora</th>
+                                <th className="px-4 py-3 text-left font-medium">Menú</th>
+                                <th className="px-4 py-3 text-left font-medium">Precio</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                            {reportData.map((row) => (
+                                <tr key={row.id} className="hover:bg-muted/50 transition-colors">
+                                    <td className="px-4 py-3">{row.id}</td>
+                                    <td className="px-4 py-3">{row.usuario}</td>
+                                    <td className="px-4 py-3">{row.fecha}</td>
+                                    <td className="px-4 py-3">{row.hora}</td>
+                                    <td className="px-4 py-3">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${row.menu === 'Sin menú'
+                                            ? 'bg-gray-100 text-gray-700'
+                                            : 'bg-blue-100 text-blue-700'
+                                            }`}>
+                                            {row.menu}
+                                        </span>
+                                    </td>                                    <td className="px-4 py-3 font-medium">
+                                        {row.precio > 0 ? formatPrice(row.precio) : '-'}
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {reportData.map((row) => (
-                                    <tr key={row.id} className="hover:bg-muted/50 transition-colors">
-                                        <td className="px-4 py-3">{row.id}</td>
-                                        <td className="px-4 py-3">{row.usuario}</td>
-                                        <td className="px-4 py-3">{row.fecha}</td>
-                                        <td className="px-4 py-3">{row.hora}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                            ))}
+                        </tbody>
+                    </table>
                     </div>
                 </CardContent>
             </Card>

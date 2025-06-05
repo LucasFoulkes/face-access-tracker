@@ -29,6 +29,13 @@ interface FaceData {
     fechaRegistro: Date;
 }
 
+interface Menu {
+    id: number;
+    name: string;
+    timeRange: string;
+    price: number;
+}
+
 export const db = new Dexie('TimeAttendanceDatabase') as Dexie & {
     usuarios: EntityTable<
         Usuario,
@@ -46,14 +53,19 @@ export const db = new Dexie('TimeAttendanceDatabase') as Dexie & {
         FaceData,
         'id' // primary key "id" (for the typings only)
     >;
+    menus: EntityTable<
+        Menu,
+        'id' // primary key "id" (for the typings only)
+    >;
 };
 
 // Schema declaration:
-db.version(1).stores({
+db.version(3).stores({
     usuarios: '++id, codigo, cedula, apellidos, nombres, pin',
     admin: '++id, usuarioId, fechaCreacion',
     registros: '++id, usuarioId, fecha, hora',
-    faceData: '++id, usuarioId, fechaRegistro'
+    faceData: '++id, usuarioId, fechaRegistro',
+    menus: '++id, name, timeRange, price'
 });
 
 db.on('populate', async () => {
@@ -70,6 +82,16 @@ db.on('populate', async () => {
         usuarioId: userId,
         fechaCreacion: new Date()
     });
+
+    // Add mock menu data
+    await db.menus.bulkAdd([
+        { name: 'Desayuno', timeRange: '06:00 - 09:00', price: 2500 },
+        { name: 'Desayuno Empresarial', timeRange: '06:00 - 09:00', price: 3500 },
+        { name: 'Almuerzo', timeRange: '11:30 - 14:30', price: 4500 },
+        { name: 'Almuerzo Empresarial', timeRange: '11:30 - 14:30', price: 6000 },
+        { name: 'Cena', timeRange: '18:00 - 21:00', price: 3800 },
+        { name: 'Cena Empresarial', timeRange: '18:00 - 21:00', price: 5200 }
+    ]);
 });
 
-export type { Usuario, Admin, Registro, FaceData };
+export type { Usuario, Admin, Registro, FaceData, Menu };

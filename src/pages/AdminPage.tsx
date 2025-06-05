@@ -2,6 +2,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import DataTable from "@/components/DataTable";
 import UsuariosCRUD from "@/components/UsuariosCRUD";
+import MenusCRUD from "@/components/MenusCRUD";
 import RegistrosTable from "@/components/RegistrosTable";
 import ReportsSection from "@/components/ReportsSection";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -92,30 +93,31 @@ function AdminPage() {
             <div className="flex-1 flex flex-col overflow-hidden">
                 {activeSection === 'database' && (
                     <div className="flex flex-col h-full">
-                        <div className="flex-shrink-0 p-4 pb-0">
-                            <Tabs defaultValue="registros" className="w-full">
-                                <TabsList className="grid w-full grid-cols-4">
-                                    <TabsTrigger className="uppercase" value="usuarios">{db.usuarios.name}</TabsTrigger>
-                                    <TabsTrigger className="uppercase" value="registros">{db.registros.name}</TabsTrigger>
-                                    <TabsTrigger className="uppercase" value="admin">{db.admin.name}</TabsTrigger>
-                                    <TabsTrigger className="uppercase" value="faceData">{db.faceData.name}</TabsTrigger>
-                                </TabsList>
-
-                                <div className="h-[calc(100vh-180px)] mt-4">
-                                    <TabsContent value="usuarios" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
-                                        <UsuariosCRUD importActions={usuariosImportActions} />
-                                    </TabsContent>
-                                    <TabsContent value="registros" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
-                                        <RegistrosTable data={registrosData} />
-                                    </TabsContent>
-                                    <TabsContent value="admin" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
-                                        <DataTable data={adminData} />
-                                    </TabsContent>
-                                    <TabsContent value="faceData" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
-                                        <DataTable data={faceDataData} />
-                                    </TabsContent>
-                                </div>
-                            </Tabs>
+                        <div className="flex-shrink-0 p-4 pb-0">                            <Tabs defaultValue="registros" className="w-full">
+                            <TabsList className="grid w-full grid-cols-5">
+                                <TabsTrigger className="uppercase" value="usuarios">{db.usuarios.name}</TabsTrigger>
+                                <TabsTrigger className="uppercase" value="menus">{db.menus.name}</TabsTrigger>
+                                <TabsTrigger className="uppercase" value="registros">{db.registros.name}</TabsTrigger>
+                                <TabsTrigger className="uppercase" value="admin">{db.admin.name}</TabsTrigger>
+                                <TabsTrigger className="uppercase" value="faceData">{db.faceData.name}</TabsTrigger>
+                            </TabsList>                                <div className="h-[calc(100vh-180px)] mt-4">
+                                <TabsContent value="usuarios" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
+                                    <UsuariosCRUD importActions={usuariosImportActions} />
+                                </TabsContent>
+                                <TabsContent value="menus" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
+                                    <MenusCRUD />
+                                </TabsContent>
+                                <TabsContent value="registros" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
+                                    <RegistrosTable data={registrosData} />
+                                </TabsContent>
+                                <TabsContent value="admin" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
+                                    <DataTable data={adminData} />
+                                </TabsContent>
+                                <TabsContent value="faceData" className="h-full m-0 data-[state=active]:flex data-[state=active]:flex-col">
+                                    <DataTable data={faceDataData} />
+                                </TabsContent>
+                            </div>
+                        </Tabs>
                         </div>
                     </div>
                 )}
