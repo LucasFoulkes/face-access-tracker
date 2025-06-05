@@ -22,7 +22,7 @@ function HomePage() {
             <KeyIndicator
                 keyLabel={keyNumber}
                 isPressed={keyboard.isPressed(keyNumber)}
-                color="yellow" // White background for better contrast on dark outline buttons
+                color="black" // White background for better contrast on dark outline buttons
             >
                 <Button
                     className="size-48 uppercase text-xl"

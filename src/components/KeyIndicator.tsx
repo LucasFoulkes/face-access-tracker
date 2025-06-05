@@ -10,10 +10,10 @@ interface KeyIndicatorProps {
 }
 
 const positionClasses = {
-    'top-left': 'top-2 left-2',
-    'top-right': 'top-2 right-2',
-    'bottom-left': 'bottom-2 left-2',
-    'bottom-right': 'bottom-2 right-2'
+    'top-left': 'top-1 left-1',
+    'top-right': 'top-1 right-1',
+    'bottom-left': 'bottom-1 left-1',
+    'bottom-right': 'bottom-1 right-1'
 };
 
 const variantClasses = {

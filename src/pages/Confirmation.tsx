@@ -44,13 +44,11 @@ function Confirmation() {
                                 keyLabel="⏎"
                                 isPressed={keyboard.isPressed('Enter')}
                                 position="top-right"
+                            >                                <Button
+                                className="w-full text-2xl !p-4 !h-auto bg-emerald-500 hover:bg-emerald-600 uppercase"
+                                onClick={handleConfirmation}
+                                disabled={isProcessing}
                             >
-                                <Button
-                                    className="w-full bg-emerald-500 hover:bg-emerald-600 uppercase"
-                                    onClick={handleConfirmation}
-                                    disabled={isProcessing}
-                                >
-
                                     {isProcessing ? 'Procesando...' : 'confirmar'}
                                 </Button>
                             </KeyIndicator>
@@ -60,12 +58,11 @@ function Confirmation() {
                                 keyLabel="⌫"
                                 isPressed={keyboard.isPressed('Backspace')}
                                 position="top-right"
+                            >                                <Button
+                                className="w-full text-2xl !p-4 !h-auto bg-amber-500 hover:bg-amber-600 uppercase"
+                                onClick={handleRetry}
+                                disabled={isProcessing}
                             >
-                                <Button
-                                    className="w-full bg-amber-500 hover:bg-amber-600 uppercase"
-                                    onClick={handleRetry}
-                                    disabled={isProcessing}
-                                >
                                     regresar
                                 </Button>
                             </KeyIndicator>

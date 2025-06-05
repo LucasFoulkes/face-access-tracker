@@ -64,11 +64,9 @@ function OTPLogin({ maxLength, fieldType }: OTPLoginProps) {
                 <KeyIndicator
                     keyLabel="⏎"
                     isPressed={keyboard.isPressed('Enter')}
-                    color='yellow'
-                    position="top-right">
-                    <Button
-                        className="uppercase text-lg"
-                        size='lg'
+                    color='black'
+                    position="top-right">                    <Button
+                        className={`uppercase text-2xl !p-4 !h-auto ${value.length === 0 ? 'bg-amber-500' : 'bg-rose-500'}`}
                         style={{ width: `${Math.min(maxLength, 5) * 64}px` }}
                         onClick={() => value.length > 0 ? setValue("") : navigate("/")}>
                         {value.length === 0 ? "regresar" : "borrar"}
