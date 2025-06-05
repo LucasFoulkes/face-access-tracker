@@ -2,7 +2,7 @@ import { Card, CardAction, CardContent, CardHeader, } from "@/components/ui/card
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState, useMemo, type ReactNode } from 'react';
-import { Download, Search } from "lucide-react";
+import { Upload, Search } from "lucide-react";
 import { useExcel } from "@/hooks/useExcel";
 
 interface DataTableProps {
@@ -45,7 +45,7 @@ function DataTable({ data, actions, showExportButton = true }: DataTableProps) {
                     {actions}
                     {showExportButton && (
                         <Button onClick={handleExport} className="uppercase bg-emerald-500 hover:bg-emerald-600" >
-                            <Download className="w-4 h-4" />exportar
+                            <Upload className="w-4 h-4" />exportar
                         </Button>
                     )}
                 </CardAction>
