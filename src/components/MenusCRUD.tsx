@@ -1,10 +1,10 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardAction, CardContent, CardHeader } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, Plus, Edit, Trash2, Save, X, Database } from "lucide-react";
+import { Search, Plus, Edit, Trash2, Save, X } from "lucide-react";
 import { db, type Menu } from "@/lib/db";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useExcel } from "@/hooks/useExcel";

@@ -44,12 +44,17 @@ export default defineConfig({
       // Disable PWA in development to avoid warnings
       devOptions: {
         enabled: true
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+      }, workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}', 'models/**/*'],
         globIgnores: ['**/node_modules/**/*', 'sw.js', 'workbox-*.js'],
         /* Skip precaching in development to avoid warnings */
         mode: process.env.NODE_ENV === 'development' ? 'development' : 'production',
+        // Add navigation routes fallback to handle SPA routing
+        navigateFallback: 'index.html',
+        // Make sure to include route for IndexedDB access
+        navigateFallbackDenylist: [/^\/api/],
+        // Increase maximum file size limit to accommodate face models
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -78,6 +83,30 @@ export default defineConfig({
             handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'static-resources',
+            },
+          },
+          // Cache for face models
+          {
+            urlPattern: /models\/.*/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'face-models-cache',
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+              },
+            },
+          },
+          // Cache for application shell (all routes)
+          {
+            urlPattern: /\/$/,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'app-shell',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 // 1 day
+              },
             },
           },
         ],

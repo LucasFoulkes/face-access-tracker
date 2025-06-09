@@ -6,6 +6,7 @@ import CedulaLogin from "./pages/CedulaLogin";
 import Confirmation from "./pages/Confirmation";
 import AdminPage from "./pages/AdminPage";
 import FaceRegistration from "./pages/FaceRegistration";
+import PWAStatus from "./components/PWAStatus";
 import "./App.css";
 
 function App() {
@@ -20,8 +21,8 @@ function App() {
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/face-registration" element={<FaceRegistration />} />
         {/* Fallback route for unknown paths */}
-
       </Routes>
+      <PWAStatus />
     </>
   )
 }

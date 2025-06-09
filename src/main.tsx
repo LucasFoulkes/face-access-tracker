@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 import { registerSW } from 'virtual:pwa-register'
+import './utils/pwa-check'
 
 // Register service worker
 const updateSW = registerSW({
@@ -12,6 +13,12 @@ const updateSW = registerSW({
       updateSW(true)
     }
   },
+  onRegisteredSW(swUrl) {
+    console.log(`Service Worker registered: ${swUrl}`)
+  },
+  onOfflineReady() {
+    console.log('App is ready for offline use')
+  }
 })
 
 createRoot(document.getElementById('root')!).render(
