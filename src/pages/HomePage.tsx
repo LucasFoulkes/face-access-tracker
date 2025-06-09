@@ -17,7 +17,9 @@ function HomePage() {
             key: button.key,
             action: () => navigate(button.route)
         }))
-    }); function loginButton(text: string, route: string, keyNumber: string) {
+    });
+
+    function loginButton(text: string, route: string, keyNumber: string) {
         return (
             <KeyIndicator
                 keyLabel={keyNumber}
@@ -33,18 +35,20 @@ function HomePage() {
                 </Button>
             </KeyIndicator>
         );
-    } return (
+    }
+
+    return (
         <div
             ref={keyboard.containerRef}
             className="flex flex-row gap-16"
             tabIndex={0}
             style={{ outline: 'none' }}
         >
-            {buttons.map((button) =>
-                loginButton(button.text, button.route, button.key)
-            )}
-        </div>
-    )
+            {buttons.map((button) => (
+                <div key={button.key}>
+                    {loginButton(button.text, button.route, button.key)}
+                </div>
+            ))}        </div>)
 }
 
 export default HomePage;
