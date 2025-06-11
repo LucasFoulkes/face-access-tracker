@@ -204,29 +204,52 @@ function FacialLogin() {
     const navigate = useNavigate();
     const webcamRef = useRef<Webcam>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [isLandscape, setIsLandscape] = useState(false);
 
-    const recognitionStatus = useFaceDetection(webcamRef, canvasRef, navigate); const keyboard = useKeyboardShortcuts({
+    const recognitionStatus = useFaceDetection(webcamRef, canvasRef, navigate);
+
+    const keyboard = useKeyboardShortcuts({
         shortcuts: [{ key: 'Enter', action: () => navigate("/") }]
     });
 
     const mirrorStyle = { transform: "scaleX(-1)" };
 
+    useEffect(() => {
+        const handleResize = () => {
+            setIsLandscape(window.innerWidth > window.innerHeight);
+        };
+
+        // Initial check
+        handleResize();
+
+        // Add event listener
+        window.addEventListener("resize", handleResize);
+
+        // Clean up
+        return () => window.removeEventListener("resize", handleResize);
+    }, []);
+
     return (
         <div
             ref={keyboard.containerRef}
-            className="flex flex-col gap-4 items-center justify-center min-h-screen"
+            className={`flex ${isLandscape ? 'flex-row' : 'flex-col'} gap-4 items-center justify-center full-height-mobile min-h-screen p-4 sm:p-6`}
             tabIndex={0}
-            style={{ outline: 'none' }}>            <div className="relative">
+            style={{ outline: 'none' }}>
+            <div className={`relative w-full max-w-md ${isLandscape ? 'max-h-[80vh]' : ''}`}>
                 <Webcam
                     ref={webcamRef}
                     audio={false}
                     screenshotFormat="image/jpeg"
-                    className="rounded-lg"
+                    className="rounded-lg w-full h-full object-cover"
                     style={mirrorStyle}
+                    videoConstraints={{
+                        facingMode: "user",
+                        aspectRatio: isLandscape ? 4 / 3 : 3 / 4
+                    }}
                 />
                 <canvas
                     ref={canvasRef}
-                    className="absolute top-0 left-0 rounded-lg"
+                    className="absolute top-0 left-0 rounded-lg w-full h-full"
                     style={mirrorStyle}
                 />
 

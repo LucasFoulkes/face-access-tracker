@@ -6,6 +6,8 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { KeyIndicator } from "@/components/KeyIndicator";
+import { useViewport } from "@/hooks/useViewport";
+import { ResponsiveContainer } from "@/components/layout/ResponsiveContainer";
 
 interface OTPLoginProps {
     maxLength: number;
@@ -16,6 +18,7 @@ function OTPLogin({ maxLength, fieldType }: OTPLoginProps) {
     const navigate = useNavigate();
     const { state } = useLocation();
     const [value, setValue] = useState("");
+    const { width, isMobile, isLandscape } = useViewport();
 
     // Check if this is a face registration flow
     const isRegistration = state?.isRegistration;
@@ -27,7 +30,9 @@ function OTPLogin({ maxLength, fieldType }: OTPLoginProps) {
             ? await db.usuarios.where(fieldType).equals(value).first()
             : null,
         [value, fieldType, maxLength]
-    );    // Keyboard shortcuts
+    );
+
+    // Keyboard shortcuts
     const keyboard = useKeyboardShortcuts({
         shortcuts: [
             {
@@ -40,7 +45,9 @@ function OTPLogin({ maxLength, fieldType }: OTPLoginProps) {
         ],
         focusSelectors: ['[data-slot="input-otp"] input', 'input[inputmode="numeric"]', 'input[type="text"]'],
         focusDelay: 200
-    });// Handle auto-navigation and auto-clear
+    });
+
+    // Handle auto-navigation and auto-clear
     useEffect(() => {
         if (value.length !== maxLength) return;
 
@@ -72,40 +79,50 @@ function OTPLogin({ maxLength, fieldType }: OTPLoginProps) {
         }
     }, [matchingUser, value.length, maxLength, navigate, fieldType, value, isRegistration, faceDescriptor]);
 
+    // Calculate the appropriate slot size based on screen size
+    const getSlotSize = () => {
+        if (width < 340) return 'size-10 text-xl';
+        if (width < 500) return 'size-14 text-xl';
+        return 'size-16 text-2xl';
+    };
+
     return (
-        <div
-            ref={keyboard.containerRef}
-            className="flex items-center justify-center min-h-screen"
-            tabIndex={0}
-            style={{ outline: 'none' }}>
-            <div className="inline-flex gap-4 flex-col items-center">
-                <InputOTP maxLength={maxLength} value={value} onChange={setValue}>
-                    <InputOTPGroup>
-                        {Array.from({ length: maxLength }, (_, i) => (
-                            <InputOTPSlot
-                                key={i}
-                                index={i}
-                                className="size-16 text-2xl"
-                            />
-                        ))}
-                    </InputOTPGroup>
-                </InputOTP>
-                <KeyIndicator
-                    keyLabel="⏎"
-                    isPressed={keyboard.isPressed('Enter')}
-                    color='black'
-                    position="top-right">                    <Button
-                        className={`uppercase text-2xl !p-4 !h-auto ${value.length === 0 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                        style={{ width: `${Math.min(maxLength, 5) * 64}px` }}
-                        onClick={() => value.length > 0
-                            ? setValue("")
-                            : navigate(isRegistration ? "/face-registration" : "/",
-                                isRegistration ? { state: { faceDescriptor } } : undefined)}>
-                        {value.length === 0 ? "regresar" : "borrar"}
-                    </Button>
-                </KeyIndicator>
+        <ResponsiveContainer className="portrait-preferred">
+            <div
+                ref={keyboard.containerRef}
+                className={`flex items-center justify-center full-height-mobile min-h-[80vh] ${isLandscape ? 'flex-row' : 'flex-col'} gap-6`}
+                tabIndex={0}
+                style={{ outline: 'none' }}>
+                <div className={`inline-flex gap-4 flex-col items-center ${isLandscape ? 'mr-8' : 'mb-4'}`}>
+                    <InputOTP maxLength={maxLength} value={value} onChange={setValue}>
+                        <InputOTPGroup>
+                            {Array.from({ length: maxLength }, (_, i) => (
+                                <InputOTPSlot
+                                    key={i}
+                                    index={i}
+                                    className={getSlotSize()}
+                                />
+                            ))}
+                        </InputOTPGroup>
+                    </InputOTP>
+                    <KeyIndicator
+                        keyLabel="⏎"
+                        isPressed={keyboard.isPressed('Enter')}
+                        color='black'
+                        position="top-right">
+                        <Button
+                            className={`uppercase text-xl !p-3 sm:!p-4 !h-auto ${value.length === 0 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                            style={{ width: `${Math.min(maxLength * (isMobile ? 40 : 64), 400)}px` }}
+                            onClick={() => value.length > 0
+                                ? setValue("")
+                                : navigate(isRegistration ? "/face-registration" : "/",
+                                    isRegistration ? { state: { faceDescriptor } } : undefined)}>
+                            {value.length === 0 ? "regresar" : "borrar"}
+                        </Button>
+                    </KeyIndicator>
+                </div>
             </div>
-        </div>
+        </ResponsiveContainer>
     );
 }
 

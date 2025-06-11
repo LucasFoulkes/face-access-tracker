@@ -3,6 +3,8 @@ body,
 #root {
     margin: 0;
     padding: 0;
+    width: 100%;
+    height: 100%;
 }
 
 body,
@@ -11,7 +13,61 @@ body,
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    /* Fallback */
+    min-height: calc(var(--vh, 1vh) * 100);
+    /* Use CSS variable for mobile browsers */
+    width: 100%;
     background-color: rgb(67, 25, 255);
     /* background-color: rgb(0, 0, 0); */
     /* background-color: rgb(230, 230, 230); */
+    overflow-x: hidden;
+}
+
+/* Responsive design utilities */
+.responsive-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    width: 100%;
+}
+
+/* Orientation handling */
+@media screen and (orientation: landscape) and (max-height: 600px) {
+    .portrait-preferred {
+        flex-direction: row !important;
+        gap: 0.5rem !important;
+    }
+
+    .full-height-mobile {
+        min-height: auto !important;
+        padding: 1rem;
+    }
+}
+
+/* Mobile specific fixes */
+@media (max-width: 640px) {
+
+    html,
+    body {
+        /* Prevent overscroll/bounce effect on iOS */
+        overscroll-behavior: none;
+        position: fixed;
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+    }
+
+    #root {
+        overflow: auto;
+        height: 100%;
+        width: 100%;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* Safari specific fixes */
+@supports (-webkit-touch-callout: none) {
+    .safari-fill-height {
+        height: -webkit-fill-available;
+    }
 }

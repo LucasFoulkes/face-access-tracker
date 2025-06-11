@@ -6,6 +6,21 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  server: {
+    // Allow ngrok connections and any other hosts
+    host: true,
+    hmr: {
+      // Allow HMR to work with ngrok
+      clientPort: 443,
+    },
+    // List of allowed hosts for accessing the dev server
+    allowedHosts: [
+      'localhost',
+      '127.0.0.1',
+      'eecf-2800-bf0-1da-d23-60be-1bff-35a3-8a85.ngrok-free.app',
+      '.ngrok-free.app', // Allow any ngrok-free.app subdomain
+    ],
+  },
   plugins: [
     react(),
     tailwindcss(),

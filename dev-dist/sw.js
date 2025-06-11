@@ -67,7 +67,7 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-5f162ca1'], (function (workbox) { 'use strict';
+define(['./workbox-a57bec8b'], (function (workbox) { 'use strict';
 
   self.addEventListener('message', event => {
     if (event.data && event.data.type === 'SKIP_WAITING') {
@@ -82,11 +82,12 @@ define(['./workbox-5f162ca1'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "index.html",
-    "revision": "0.u4lf7lo4u7g"
+    "revision": "0.ohcpdiq0a8"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
-    allowlist: [/^\/$/]
+    allowlist: [/^\/$/],
+    denylist: [/^\/api/]
   }));
   workbox.registerRoute(/^https:\/\/fonts\.googleapis\.com\/.*/i, new workbox.CacheFirst({
     "cacheName": "google-fonts-cache",
@@ -105,6 +106,20 @@ define(['./workbox-5f162ca1'], (function (workbox) { 'use strict';
   workbox.registerRoute(/\.(?:js|css)$/, new workbox.StaleWhileRevalidate({
     "cacheName": "static-resources",
     plugins: []
+  }), 'GET');
+  workbox.registerRoute(/models\/.*/, new workbox.CacheFirst({
+    "cacheName": "face-models-cache",
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 20,
+      maxAgeSeconds: 31536000
+    })]
+  }), 'GET');
+  workbox.registerRoute(/\/$/, new workbox.NetworkFirst({
+    "cacheName": "app-shell",
+    plugins: [new workbox.ExpirationPlugin({
+      maxEntries: 10,
+      maxAgeSeconds: 86400
+    })]
   }), 'GET');
 
 }));
