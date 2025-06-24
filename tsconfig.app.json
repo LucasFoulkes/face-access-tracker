@@ -13,7 +13,7 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
@@ -21,10 +21,9 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    /* Path mapping */
+    /* Shadcn */
     "baseUrl": ".",
     "paths": {
       "@/*": [
@@ -33,10 +32,6 @@
     }
   },
   "include": [
-    "src",
-    "vite.config.ts"
-  ],
-  "types": [
-    "vite-plugin-pwa/client"
+    "src"
   ]
 }

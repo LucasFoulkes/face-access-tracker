@@ -1,70 +1,52 @@
-import { Routes, Route } from "react-router-dom";
-import HomePage from "./pages/HomePage";
-import FacialLogin from "./pages/FacialLogin";
-import PinLogin from "./pages/PinLogin";
-import CedulaLogin from "./pages/CedulaLogin";
-import Confirmation from "./pages/Confirmation";
-import AdminPage from "./pages/AdminPage";
-import FaceRegistration from "./pages/FaceRegistration";
-import PWAStatus from "./components/PWAStatus";
-import { useEffect, useState } from "react";
-import { isHostAllowed } from "./utils/cors";
-import "./App.css";
+import './App.css'
+import { useRef, useEffect, useState } from 'react'
 
 function App() {
-  const [corsError, setCorsError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [error, setError] = useState<string>('');
 
-  // Apply viewport fixes for mobile devices - prevent zoom on input focus in iOS
-  useEffect(() => {
-    // Add meta viewport event listeners for iOS to prevent zoom on input focus
-    document.addEventListener('gesturestart', (e) => e.preventDefault());
-    document.addEventListener('gesturechange', (e) => e.preventDefault());
-    document.addEventListener('gestureend', (e) => e.preventDefault());
+  const cameraConstraints = {
+    audio: false,
+    video: { facingMode: { exact: "user" }, }
+  };
 
-    // Set viewport height as CSS variable to handle iOS Safari issues
-    const setViewportHeight = () => {
-      document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
-    };
-
-    setViewportHeight();
-    window.addEventListener('resize', setViewportHeight);
-    window.addEventListener('orientationchange', setViewportHeight);
-
-    // Check if the current host is allowed
-    const checkHostAccess = () => {
-      if (!isHostAllowed(window.location.href)) {
-        setCorsError(`This host (${window.location.hostname}) might be blocked. If you're experiencing issues, please update vite.config.ts allowedHosts.`);
+  const initializeCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(cameraConstraints);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
       }
-    };
+    } catch (err) {
+      setError(`Camera access failed: ${(err as Error).message}`);
+    }
+  };
 
-    checkHostAccess();
+  useEffect(() => {
+    initializeCamera();
 
     return () => {
-      window.removeEventListener('resize', setViewportHeight);
-      window.removeEventListener('orientationchange', setViewportHeight);
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
     };
   }, []);
 
   return (
-    <>
-      {corsError && (
-        <div className="fixed top-0 left-0 right-0 p-2 bg-yellow-500 text-black text-center z-50">
-          ⚠️ {corsError}
-        </div>
+    <div className="flex flex-col items-center flex-1 justify-center items-center h-screen bg-black">
+      <video
+        ref={videoRef}
+        className="w-full"
+        autoPlay
+        playsInline
+        muted
+      />
+
+      {error && (
+        <div className="mt-4 text-red-500 text-center">{error}</div>
       )}
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/facial" element={<FacialLogin />} />
-        <Route path="/pin" element={<PinLogin />} />
-        <Route path="/cedula" element={<CedulaLogin />} />
-        <Route path="/confirmation" element={<Confirmation />} />
-        <Route path="/admin" element={<AdminPage />} />
-        <Route path="/face-registration" element={<FaceRegistration />} />
-        {/* Fallback route for unknown paths */}
-      </Routes>
-      <PWAStatus />
-    </>
-  );
+    </div>
+  )
 }
 
-export default App;
+export default App
