@@ -1,90 +1,92 @@
+// App.tsx — React + face-api.js
+// Updated to wait for video metadata before starting detection.
+
 import { useRef, useEffect, useState, useCallback } from 'react'
 import * as faceapi from 'face-api.js'
+
+const MODEL_URI = '/models'
+
 export default function App() {
-  // DOM refs
+  /* ---------- Refs ---------- */
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
-  // UI state
-  const [loadErr, setLoadErr] = useState('')
+  /* ---------- State ---------- */
+  const [err, setErr] = useState('')
   const [modelReady, setModelReady] = useState(false)
-  /* ---------------- Model Loader ---------------- */
+  const [videoReady, setVideoReady] = useState(false) // <- new flag
+  /* ---------- Load model ---------- */
   useEffect(() => {
     Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
-      faceapi.nets.faceLandmark68Net.loadFromUri('/models')
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URI),
+      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URI)
     ])
       .then(() => setModelReady(true))
-      .catch(err => setLoadErr(`Model: ${err.message}`))
+      .catch(e => setErr(`model: ${e.message}`))
   }, [])
 
-  /* ---------------- Camera Stream ---------------- */
+  /* ---------- Open camera ---------- */
   useEffect(() => {
-    const constraints: MediaStreamConstraints = {
-      audio: false,
-      video: { facingMode: 'user' } // allow fallback; "exact" is brittle
-    }
-
-    navigator.mediaDevices.getUserMedia(constraints)
-      .then(stream => { if (videoRef.current) videoRef.current.srcObject = stream })
-      .catch(err => setLoadErr(`Camera: ${err.message}`))
+    navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'user' } })
+      .then(stream => {
+        const v = videoRef.current
+        if (v) {
+          v.srcObject = stream
+          v.onloadedmetadata = () => {
+            setVideoReady(true)        // we now know videoWidth/Height > 0
+            v.play().catch(() => {/* autoplay rejection ignored; muted flag helps */ })
+          }
+        }
+      })
+      .catch(e => setErr(`cam: ${e.message}`))
 
     return () => {
-      // Close camera when component unmounts
       videoRef.current?.srcObject &&
         (videoRef.current.srcObject as MediaStream)
           .getTracks().forEach(t => t.stop())
     }
   }, [])
-  /* ---------------- Draw helper ---------------- */
+  /* ---------- Draw helper ---------- */
   const drawDetection = useCallback((result: faceapi.WithFaceLandmarks<{ detection: faceapi.FaceDetection }>) => {
     const video = videoRef.current!
     const canvas = canvasRef.current!
     const ctx = canvas.getContext('2d')!
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height) // remove stale box
-
-    const displaySize = { width: video.videoWidth, height: video.videoHeight }
-    const resizedResults = faceapi.resizeResults(result, displaySize)
-
-    // Draw face detection box
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    const resizedResults = faceapi.resizeResults(result, { width: video.videoWidth, height: video.videoHeight })
     faceapi.draw.drawDetections(canvas, resizedResults)
-    // Draw face landmarks
     faceapi.draw.drawFaceLandmarks(canvas, resizedResults)
   }, [])
 
-  /* ---------------- Detection Loop ---------------- */
+  /* ---------- Detection loop ---------- */
   useEffect(() => {
-    if (!modelReady) return
+    if (!modelReady || !videoReady) return  // wait for both resources
 
-    let busy = false      // prevents overlapping async calls
-    let rafId: number
+    let busy = false, raf: number
 
     const step = async () => {
-      const video = videoRef.current
-      const canvas = canvasRef.current
-      if (!video || !canvas) { rafId = requestAnimationFrame(step); return }      // keep canvas dims synced to video frame (cheap)
-      if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth
-      if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight
+      const v = videoRef.current
+      const c = canvasRef.current
+      if (!v || !c) { raf = requestAnimationFrame(step); return }
+
+      // sync canvas dims with video frame size
+      if (c.width !== v.videoWidth) c.width = v.videoWidth
+      if (c.height !== v.videoHeight) c.height = v.videoHeight
 
       if (!busy) {
         busy = true
-
-        const result = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-          .withFaceLandmarks()
-        if (result) drawDetection(result) // clear+draw only when a face is found
-        // else: leave old box visible
-
+        const det = await faceapi.detectSingleFace(v, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks() // <- detect with landmarks
+        if (det) drawDetection(det) // clear+draw only when we have a face
         busy = false
       }
-      rafId = requestAnimationFrame(step)
+      raf = requestAnimationFrame(step)
     }
 
-    rafId = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(rafId)
-  }, [modelReady, drawDetection])
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [modelReady, videoReady, drawDetection])
 
-  /* ---------------- UI ---------------- */
+  /* ---------- UI ---------- */
   return (
     <div className="flex h-screen w-screen items-center justify-center bg-black">
       <div className="relative w-full max-w-xl">
@@ -92,8 +94,8 @@ export default function App() {
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
       </div>
 
-      {loadErr && <p className="mt-4 text-red-500">{loadErr}</p>}
-      {!modelReady && !loadErr && <p className="mt-4 text-white">Loading face detector…</p>}
+      {err && <p className="mt-4 text-red-500">{err}</p>}
+      {!modelReady && !err && <p className="mt-4 text-white">Loading face detector…</p>}
     </div>
   )
 }
