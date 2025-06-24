@@ -1,52 +1,95 @@
-import './App.css'
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
+import * as faceapi from 'face-api.js'
+export default function App() {
+  // DOM refs
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
-function App() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [error, setError] = useState<string>('');
+  // UI state
+  const [loadErr, setLoadErr] = useState('')
+  const [modelReady, setModelReady] = useState(false)
 
-  const cameraConstraints = {
-    audio: false,
-    video: { facingMode: { exact: "user" }, }
-  };
-
-  const initializeCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia(cameraConstraints);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      setError(`Camera access failed: ${(err as Error).message}`);
-    }
-  };
-
+  /* ---------------- Model Loader ---------------- */
   useEffect(() => {
-    initializeCamera();
+    faceapi.nets.tinyFaceDetector.loadFromUri('/models')
+      .then(() => setModelReady(true))
+      .catch(err => setLoadErr(`Model: ${err.message}`))
+  }, [])
+
+  /* ---------------- Camera Stream ---------------- */
+  useEffect(() => {
+    const constraints: MediaStreamConstraints = {
+      audio: false,
+      video: { facingMode: 'user' } // allow fallback; "exact" is brittle
+    }
+
+    navigator.mediaDevices.getUserMedia(constraints)
+      .then(stream => { if (videoRef.current) videoRef.current.srcObject = stream })
+      .catch(err => setLoadErr(`Camera: ${err.message}`))
 
     return () => {
-      if (videoRef.current?.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
+      // Close camera when component unmounts
+      videoRef.current?.srcObject &&
+        (videoRef.current.srcObject as MediaStream)
+          .getTracks().forEach(t => t.stop())
+    }
+  }, [])
+
+  /* ---------------- Draw helper ---------------- */
+  const drawDetection = useCallback((det: faceapi.FaceDetection) => {
+    const video = videoRef.current!
+    const canvas = canvasRef.current!
+    const ctx = canvas.getContext('2d')!
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height) // remove stale box
+    faceapi.draw.drawDetections(
+      canvas,
+      faceapi.resizeResults(det, { width: video.videoWidth, height: video.videoHeight })
+    )
+  }, [])
+
+  /* ---------------- Detection Loop ---------------- */
+  useEffect(() => {
+    if (!modelReady) return
+
+    let busy = false      // prevents overlapping async calls
+    let rafId: number
+
+    const step = async () => {
+      const video = videoRef.current
+      const canvas = canvasRef.current
+      if (!video || !canvas) { rafId = requestAnimationFrame(step); return }
+
+      // keep canvas dims synced to video frame (cheap)
+      if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth
+      if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight
+
+      if (!busy) {
+        busy = true
+
+        const det = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+        if (det) drawDetection(det) // clear+draw only when a face is found
+        // else: leave old box visible
+
+        busy = false
       }
-    };
-  }, []);
+      rafId = requestAnimationFrame(step)
+    }
 
+    rafId = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(rafId)
+  }, [modelReady, drawDetection])
+
+  /* ---------------- UI ---------------- */
   return (
-    <div className="flex flex-col items-center flex-1 justify-center items-center h-screen bg-black">
-      <video
-        ref={videoRef}
-        className="w-full"
-        autoPlay
-        playsInline
-        muted
-      />
+    <div className="flex h-screen w-screen items-center justify-center bg-black">
+      <div className="relative w-full max-w-xl">
+        <video ref={videoRef} className="w-full" autoPlay playsInline muted />
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+      </div>
 
-      {error && (
-        <div className="mt-4 text-red-500 text-center">{error}</div>
-      )}
+      {loadErr && <p className="mt-4 text-red-500">{loadErr}</p>}
+      {!modelReady && !loadErr && <p className="mt-4 text-white">Loading face detector…</p>}
     </div>
   )
 }
-
-export default App
