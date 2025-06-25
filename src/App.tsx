@@ -35,9 +35,11 @@ const loadDB = (): faceapi.LabeledFaceDescriptors[] =>
 const saveDescriptor = (label: string, desc: Float32Array) => {
   const db: Raw[] = JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]');
   const record = db.find(r => r.label === label);
-  (record ? record.descriptors : (db.push({ label, descriptors: [] }), db.at(-1)!.descriptors)).push(
-    Array.from(desc)
-  );
+  if (record) {
+    record.descriptors.push(Array.from(desc));
+  } else {
+    db.push({ label, descriptors: [Array.from(desc)] });
+  }
   localStorage.setItem(LOCAL_KEY, JSON.stringify(db));
 };
 
@@ -59,7 +61,7 @@ function useModels() {
   return ready;
 }
 
-function useCamera(video: React.RefObject<HTMLVideoElement>, active: boolean) {
+function useCamera(video: React.RefObject<HTMLVideoElement | null>, active: boolean) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
