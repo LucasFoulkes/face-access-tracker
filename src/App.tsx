@@ -8,12 +8,51 @@ export default function App() {
   /* ---------- Refs ---------- */
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-
   /* ---------- State ---------- */
   const [err, setErr] = useState('')
   const [modelReady, setMR] = useState(false)
   const [videoReady, setVR] = useState(false)
   const [frozen, setFrozen] = useState(false)   /* ★ */
+  const [browserSupported, setBrowserSupported] = useState(true)
+
+  /* ---------- Browser Compatibility Check ---------- */
+  useEffect(() => {
+    const checkBrowserSupport = () => {
+      const userAgent = navigator.userAgent
+      const isChrome = /Chrome/.test(userAgent)
+      const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent)
+      const isFirefox = /Firefox/.test(userAgent)
+
+      // Check Chrome version
+      if (isChrome) {
+        const chromeVersion = userAgent.match(/Chrome\/(\d+)/)?.[1]
+        if (chromeVersion && parseInt(chromeVersion) < 70) {
+          setErr(`Chrome ${chromeVersion} is too old. Please update to Chrome 70+`)
+          setBrowserSupported(false)
+          return
+        }
+      }
+
+      // Check for required APIs
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setErr('Camera access not supported in this browser')
+        setBrowserSupported(false)
+        return
+      }
+
+      if (!window.requestAnimationFrame) {
+        setErr('Animation not supported in this browser')
+        setBrowserSupported(false)
+        return
+      }
+
+      console.log('Browser:', isChrome ? `Chrome ${userAgent.match(/Chrome\/(\d+)/)?.[1]}` :
+        isSafari ? 'Safari' :
+          isFirefox ? 'Firefox' : 'Unknown')
+    }
+
+    checkBrowserSupport()
+  }, [])
 
   /* ---------- Restart handler ---------- */
   const restart = useCallback(() => {
@@ -23,20 +62,20 @@ export default function App() {
     const c = canvasRef.current
     c && c.getContext('2d')?.clearRect(0, 0, c.width, c.height)
   }, [])
-
   /* ---------- Load models (unchanged) ---------- */
   useEffect(() => {
+    if (!browserSupported) return
+
     Promise.all([
       faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URI),
       faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URI)
     ])
       .then(() => setMR(true))
       .catch(e => setErr(`model: ${e.message}`))
-  }, [])
-
+  }, [browserSupported])
   /* ---------- Open / close camera (keyed on frozen) ---------- */
   useEffect(() => {
-    if (frozen) return            // skip while frozen
+    if (frozen || !browserSupported) return            // skip while frozen or unsupported
 
     navigator.mediaDevices
       .getUserMedia({ audio: false, video: { facingMode: 'user' } })
@@ -53,7 +92,7 @@ export default function App() {
         (videoRef.current.srcObject as MediaStream)
           .getTracks().forEach(t => t.stop())
     }
-  }, [frozen])
+  }, [frozen, browserSupported])
 
   /* ---------- Draw helper (unchanged) ---------- */
   const drawDetection = useCallback((result: faceapi.WithFaceLandmarks<{ detection: faceapi.FaceDetection }>) => {
@@ -100,10 +139,9 @@ export default function App() {
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
   }, [modelReady, videoReady, frozen, drawDetection])
-
   /* ---------- UI ---------- */
   return (
-    <div className="flex h-screen w-screen flex-col items-center justify-center bg-black">
+    <div className="flex h-screen w-screen flex-col items-center justify-center" style={{ backgroundColor: '#000000' }}>
       <div className="relative w-full max-w-xl">
         <video ref={videoRef} className="w-full" autoPlay playsInline muted />
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full pointer-events-none" />
@@ -114,7 +152,8 @@ export default function App() {
       {frozen && (
         <Button
           onClick={restart}
-          className="absolute mt-6 rounded-none bg-emerald-500 uppercase"
+          className="absolute mt-6 rounded-none uppercase text-white"
+          style={{ backgroundColor: '#10b981' }}
         >
           detect
         </Button>
