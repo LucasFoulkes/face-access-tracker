@@ -21,7 +21,7 @@ const DETECTOR_OPTS = new faceapi.TinyFaceDetectorOptions({
   scoreThreshold: 0.4   // slightly more tolerant
 });
 
-/* ──────────────── Local-storage helpers ──────────────── */
+/* ──────────────── Local‑storage helpers ──────────────── */
 type Raw = { label: string; descriptors: number[][] };
 
 const loadDB = (): faceapi.LabeledFaceDescriptors[] =>
@@ -109,7 +109,6 @@ function useFaceMatcher(ready: boolean) {
 /* ──────────────── App ──────────────── */
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const modelsReady = useModels();
   const { matcher, add } = useFaceMatcher(modelsReady);
@@ -120,46 +119,35 @@ export default function App() {
   /* camera runs whenever no dialog is open */
   const camReady = useCamera(videoRef, modelsReady && dialog === null);
 
-  /* auto-close greet dialog after DIALOG_MS */
+  /* auto‑close greet dialog after DIALOG_MS */
   useEffect(() => {
     if (dialog !== 'greet') return;
     const id = setTimeout(() => closeDialog(), DIALOG_MS);
     return () => clearTimeout(id);
   }, [dialog]);
-  /* draw & detect loop */
+
+  /* detect loop (no canvas needed) */
   useEffect(() => {
     if (!modelsReady || !camReady || dialog) return;
 
     const v = videoRef.current;
-    const c = canvasRef.current;
-    if (!v || !c) return;
+    if (!v) return;
 
     let raf = 0;
-    const ctx = c.getContext('2d')!;
 
     const tick = async () => {
-      // bail out quietly until video really has dimensions
+      // bail out quietly until video has dimensions
       if (!v.videoWidth || !v.videoHeight) {
         raf = requestAnimationFrame(tick);
         return;
       }
-
-      // keep canvas in sync with the video element
-      if (c.width !== v.videoWidth) c.width = v.videoWidth;
-      if (c.height !== v.videoHeight) c.height = v.videoHeight;
 
       const res = await faceapi
         .detectSingleFace(v, DETECTOR_OPTS)
         .withFaceLandmarks()
         .withFaceDescriptor();
 
-      ctx.clearRect(0, 0, c.width, c.height);
-
       if (res) {
-        const sized = faceapi.resizeResults(res, { width: v.videoWidth, height: v.videoHeight });
-        faceapi.draw.drawDetections(c, sized);
-        faceapi.draw.drawFaceLandmarks(c, sized);
-
         v.pause(); // freeze frame while interacting with user
 
         const desc = res.descriptor as Float32Array;
@@ -200,7 +188,7 @@ export default function App() {
     const label = (input || `person_${Date.now()}`).trim();
     add(label, pendingDesc);
     setName(label);
-    setDialog('greet');          // switch to greet → auto-close 5 s
+    setDialog('greet');          // switch to greet → auto‑close 5 s
   };
 
   /* ──────────────── UI ──────────────── */
@@ -208,7 +196,6 @@ export default function App() {
     <div className="flex h-screen w-screen flex-col items-center justify-center bg-black">
       <div className="relative w-full max-w-xl">
         <video ref={videoRef} className="w-full" autoPlay playsInline muted />
-        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
       </div>
 
       {/* ─── Dialog ─── */}
