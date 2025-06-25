@@ -13,69 +13,30 @@ export default function App() {
   const [modelReady, setMR] = useState(false)
   const [videoReady, setVR] = useState(false)
   const [frozen, setFrozen] = useState(false)   /* ★ */
-  const [browserSupported, setBrowserSupported] = useState(true)
-
-  /* ---------- Browser Compatibility Check ---------- */
-  useEffect(() => {
-    const checkBrowserSupport = () => {
-      const userAgent = navigator.userAgent
-      const isChrome = /Chrome/.test(userAgent)
-      const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent)
-      const isFirefox = /Firefox/.test(userAgent)
-
-      // Check Chrome version
-      if (isChrome) {
-        const chromeVersion = userAgent.match(/Chrome\/(\d+)/)?.[1]
-        if (chromeVersion && parseInt(chromeVersion) < 70) {
-          setErr(`Chrome ${chromeVersion} is too old. Please update to Chrome 70+`)
-          setBrowserSupported(false)
-          return
-        }
-      }
-
-      // Check for required APIs
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setErr('Camera access not supported in this browser')
-        setBrowserSupported(false)
-        return
-      }
-
-      if (!window.requestAnimationFrame) {
-        setErr('Animation not supported in this browser')
-        setBrowserSupported(false)
-        return
-      }
-
-      console.log('Browser:', isChrome ? `Chrome ${userAgent.match(/Chrome\/(\d+)/)?.[1]}` :
-        isSafari ? 'Safari' :
-          isFirefox ? 'Firefox' : 'Unknown')
-    }
-
-    checkBrowserSupport()
-  }, [])
-
+  const [countdown, setCountdown] = useState(0) /* ★ */
   /* ---------- Restart handler ---------- */
   const restart = useCallback(() => {
     setFrozen(false)          // reopen camera → detection loop resumes
     setVR(false)              // force metadata wait
+    setCountdown(0)           // reset countdown
     // wipe old drawing
     const c = canvasRef.current
     c && c.getContext('2d')?.clearRect(0, 0, c.width, c.height)
   }, [])
+
   /* ---------- Load models (unchanged) ---------- */
   useEffect(() => {
-    if (!browserSupported) return
-
     Promise.all([
       faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URI),
       faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URI)
     ])
       .then(() => setMR(true))
       .catch(e => setErr(`model: ${e.message}`))
-  }, [browserSupported])
+  }, [])
+
   /* ---------- Open / close camera (keyed on frozen) ---------- */
   useEffect(() => {
-    if (frozen || !browserSupported) return            // skip while frozen or unsupported
+    if (frozen) return            // skip while frozen
 
     navigator.mediaDevices
       .getUserMedia({ audio: false, video: { facingMode: 'user' } })
@@ -92,7 +53,7 @@ export default function App() {
         (videoRef.current.srcObject as MediaStream)
           .getTracks().forEach(t => t.stop())
     }
-  }, [frozen, browserSupported])
+  }, [frozen])
 
   /* ---------- Draw helper (unchanged) ---------- */
   const drawDetection = useCallback((result: faceapi.WithFaceLandmarks<{ detection: faceapi.FaceDetection }>) => {
@@ -113,9 +74,7 @@ export default function App() {
     let busy = false, raf: number
     const step = async () => {
       const v = videoRef.current, c = canvasRef.current
-      if (!v || !c) { raf = requestAnimationFrame(step); return }
-
-      if (c.width !== v.videoWidth) c.width = v.videoWidth
+      if (!v || !c) { raf = requestAnimationFrame(step); return } if (c.width !== v.videoWidth) c.width = v.videoWidth
       if (c.height !== v.videoHeight) c.height = v.videoHeight
 
       if (!busy) {
@@ -129,16 +88,31 @@ export default function App() {
             v.pause()
               ; (v.srcObject as MediaStream).getTracks().forEach(t => t.stop())
             setFrozen(true)        // stop everything
+            setCountdown(5)        // start countdown
             return
           }
         } finally { busy = false }
-      }
-      raf = requestAnimationFrame(step)
+      } raf = requestAnimationFrame(step)
     }
 
     raf = requestAnimationFrame(step)
     return () => cancelAnimationFrame(raf)
   }, [modelReady, videoReady, frozen, drawDetection])
+
+  /* ---------- Countdown timer ---------- */
+  useEffect(() => {
+    if (!frozen || countdown <= 0) return
+
+    const timer = setTimeout(() => {
+      if (countdown === 1) {
+        restart() // auto-press after countdown
+      } else {
+        setCountdown(countdown - 1)
+      }
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [frozen, countdown, restart])
   /* ---------- UI ---------- */
   return (
     <div className="flex h-screen w-screen flex-col items-center justify-center" style={{ backgroundColor: '#000000' }}>
@@ -148,14 +122,13 @@ export default function App() {
       </div>
 
       {err && <p className="mt-4 text-red-500">{err}</p>}
-      {!modelReady && !err && <p className="mt-4 text-white">Loading face detector…</p>}
-      {frozen && (
+      {!modelReady && !err && <p className="mt-4 text-white">Loading face detector…</p>}      {frozen && (
         <Button
           onClick={restart}
           className="absolute mt-6 rounded-none uppercase text-white"
           style={{ backgroundColor: '#10b981' }}
         >
-          detect
+          {countdown > 0 ? `detect (${countdown})` : 'detect'}
         </Button>
       )}
     </div>
