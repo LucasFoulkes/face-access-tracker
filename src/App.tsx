@@ -1,39 +1,26 @@
-import { useRef, useEffect, useState, useCallback } from "react";
-import * as faceapi from "face-api.js";
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Button } from "./components/ui/button";
+import { useRef, useEffect, useState, useCallback } from 'react';
+import * as faceapi from 'face-api.js';
+import { Button } from './components/ui/button';
 
-const MODEL_URI = "/models";
-const LOCAL_KEY = "face_descriptors_v1";
+const MODEL_URI = '/models';
+const LOCAL_KEY = 'face_descriptors_v1';
 
 export default function App() {
-  /* ---------- Refs ---------- */
+  // ---------- Refs ----------
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  /* ---------- State ---------- */
-  const [err, setErr] = useState("");
+  // ---------- State ----------
+  const [err, setErr] = useState('');
   const [modelReady, setMR] = useState(false);
   const [videoReady, setVR] = useState(false);
   const [frozen, setFrozen] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [matcher, setMatcher] = useState<faceapi.FaceMatcher | null>(null);
-  const [pendingDesc, setPendingDesc] = useState<Float32Array | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [inputName, setInputName] = useState("");
-  const [recognizedName, setRecognizedName] = useState<string | null>(null);
 
   /* ---------- Storage helpers ---------- */
   const loadDB = () =>
-    (JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]") as {
+    (JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]') as {
       label: string;
       descriptors: number[][];
     }[]).map(
@@ -45,7 +32,7 @@ export default function App() {
     );
 
   const saveDescriptor = (label: string, desc: Float32Array) => {
-    const db = JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]");
+    const db = JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]');
     const hit = db.find((e: any) => e.label === label);
     if (hit) hit.descriptors.push(Array.from(desc));
     else db.push({ label, descriptors: [Array.from(desc)] });
@@ -54,12 +41,11 @@ export default function App() {
 
   /* ---------- Restart handler ---------- */
   const restart = useCallback(() => {
-    setRecognizedName(null);
     setFrozen(false);
     setVR(false);
     setCountdown(0);
     const c = canvasRef.current;
-    c && c.getContext("2d")?.clearRect(0, 0, c.width, c.height);
+    c && c.getContext('2d')?.clearRect(0, 0, c.width, c.height);
   }, []);
 
   /* ---------- Load models ---------- */
@@ -85,7 +71,7 @@ export default function App() {
     if (frozen) return;
 
     navigator.mediaDevices
-      .getUserMedia({ audio: false, video: { facingMode: "user" } })
+      .getUserMedia({ audio: false, video: { facingMode: 'user' } })
       .then((stream) => {
         const v = videoRef.current;
         if (!v) return;
@@ -114,7 +100,7 @@ export default function App() {
     ) => {
       const video = videoRef.current!;
       const canvas = canvasRef.current!;
-      const ctx = canvas.getContext("2d")!;
+      const ctx = canvas.getContext('2d')!;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const resized = faceapi.resizeResults(result, {
@@ -130,6 +116,7 @@ export default function App() {
   /* ---------- Detection loop ---------- */
   useEffect(() => {
     if (!modelReady || !videoReady || frozen) return;
+
     let busy = false,
       raf: number;
     const step = async () => {
@@ -151,24 +138,27 @@ export default function App() {
             .withFaceDescriptor();
           if (det) {
             const desc = det.descriptor as Float32Array;
-            let label = "unknown";
+            let label = 'unknown';
 
             if (matcher) {
               const best = matcher.findBestMatch(desc);
-              if (best.distance <= 0.55 && best.label !== "unknown") label = best.label;
+              if (best.distance <= 0.55 && best.label !== 'unknown')
+                label = best.label;
             }
 
-            if (label === "unknown") {
-              // prompt for name
-              setPendingDesc(desc);
-              setDialogOpen(true);
-            } else {
-              setRecognizedName(label);
+            if (label === 'unknown') {
+              label = `person_${Date.now()}`;
+              saveDescriptor(label, desc);
+              setMatcher(new faceapi.FaceMatcher(loadDB(), 0.55));
             }
 
+            console.log(`⟹ ${label}`);
             drawDetection(det);
+
             v.pause();
-            (v.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+            (v.srcObject as MediaStream)
+              .getTracks()
+              .forEach((t) => t.stop());
             setFrozen(true);
             setCountdown(5);
             return;
@@ -183,18 +173,6 @@ export default function App() {
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [modelReady, videoReady, frozen, matcher, drawDetection]);
-
-  /* ---------- Handle dialog save ---------- */
-  const handleSaveName = () => {
-    if (!pendingDesc) return;
-    const clean = inputName.trim() || `person_${Date.now()}`;
-    saveDescriptor(clean, pendingDesc);
-    setMatcher(new faceapi.FaceMatcher(loadDB(), 0.55));
-    setPendingDesc(null);
-    setInputName("");
-    setDialogOpen(false);
-    setRecognizedName(clean);
-  };
 
   /* ---------- Countdown timer ---------- */
   useEffect(() => {
@@ -215,7 +193,13 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen flex-col items-center justify-center bg-black">
       <div className="relative w-full max-w-xl">
-        <video ref={videoRef} className="w-full" autoPlay playsInline muted />
+        <video
+          ref={videoRef}
+          className="w-full"
+          autoPlay
+          playsInline
+          muted
+        />
         <canvas
           ref={canvasRef}
           className="absolute inset-0 h-full w-full pointer-events-none"
@@ -231,34 +215,9 @@ export default function App() {
           onClick={restart}
           className="absolute mt-6 rounded-none uppercase text-white bg-emerald-500"
         >
-          {recognizedName ? `${recognizedName} · detect` : countdown > 0 ? `detect (${countdown})` : "detect"}
+          {countdown > 0 ? `detect (${countdown})` : 'detect'}
         </Button>
       )}
-
-      {/* ---------- Name input dialog ---------- */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogTrigger asChild></DialogTrigger>
-        <DialogContent className="sm:max-w-xs">
-          <DialogHeader>
-            <DialogTitle>Name this face</DialogTitle>
-          </DialogHeader>
-          <Input
-            autoFocus
-            placeholder="Type a name…"
-            value={inputName}
-            onChange={(e) => setInputName(e.currentTarget.value)}
-            className="mt-4"
-          />
-          <DialogFooter className="mt-4 space-x-2">
-            <Button variant="secondary" onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button disabled={!pendingDesc} onClick={handleSaveName}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
