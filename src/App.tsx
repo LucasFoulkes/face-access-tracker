@@ -1,11 +1,11 @@
+// App.tsx
 import { useRef, useEffect, useState, useCallback } from 'react';
 import * as faceapi from 'face-api.js';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogTitle,
-  DialogFooter
+  DialogTitle
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,108 +14,87 @@ import { Button } from '@/components/ui/button';
 const MODEL_URI = '/models';
 const LOCAL_KEY = 'face_descriptors_v1';
 const THRESHOLD = 0.55;
-const COUNTDOWN_SEC = 5;
+const DIALOG_MS = 5_000;               // auto-close delay
 
-/* ───────────────── Local-storage helpers ───────────────── */
-type RawDescriptor = { label: string; descriptors: number[][] };
+const DETECTOR_OPTS = new faceapi.TinyFaceDetectorOptions({
+  inputSize: 160,       // much faster, good enough for webcam
+  scoreThreshold: 0.4   // slightly more tolerant
+});
+
+/* ──────────────── Local-storage helpers ──────────────── */
+type Raw = { label: string; descriptors: number[][] };
 
 const loadDB = (): faceapi.LabeledFaceDescriptors[] =>
-  (JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]') as RawDescriptor[])
-    .map(
-      r =>
-        new faceapi.LabeledFaceDescriptors(
-          r.label,
-          r.descriptors.map(d => new Float32Array(d))
-        )
-    );
+  (JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]') as Raw[]).map(r =>
+    new faceapi.LabeledFaceDescriptors(
+      r.label,
+      r.descriptors.map(d => new Float32Array(d))
+    )
+  );
 
 const saveDescriptor = (label: string, desc: Float32Array) => {
-  const db: RawDescriptor[] = JSON.parse(
-    localStorage.getItem(LOCAL_KEY) || '[]'
+  const db: Raw[] = JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]');
+  const record = db.find(r => r.label === label);
+  (record ? record.descriptors : (db.push({ label, descriptors: [] }), db.at(-1)!.descriptors)).push(
+    Array.from(desc)
   );
-  const hit = db.find(d => d.label === label);
-  if (hit) hit.descriptors.push(Array.from(desc));
-  else db.push({ label, descriptors: [Array.from(desc)] });
   localStorage.setItem(LOCAL_KEY, JSON.stringify(db));
 };
 
-/* ───────────────── Custom hooks ───────────────── */
+/* ──────────────── Hooks ──────────────── */
 function useModels() {
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
     (async () => {
-      try {
-        await Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URI),
-          faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URI),
-          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URI)
-        ]);
-        if (!cancelled) setReady(true);
-      } catch (e: any) {
-        if (!cancelled) setError(e.message ?? 'model load');
-      }
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URI),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URI),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URI)
+      ]);
+      setReady(true);
     })();
-    return () => {
-      cancelled = true;
-    };
   }, []);
-
-  return { ready, error };
-}
-
-function useCamera(video: React.RefObject<HTMLVideoElement>, enabled: boolean) {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    const controller = new AbortController();
-
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
-          audio: false
-        });
-        if (controller.signal.aborted) {
-          stream.getTracks().forEach(t => t.stop());
-          return;
-        }
-        const v = video.current;
-        if (!v) return;
-        v.srcObject = stream;
-        v.onloadedmetadata = () => {
-          v.play().catch(() => void 0);
-          setReady(true);
-        };
-      } catch {
-        /* silently ignore, error handled in parent */
-      }
-    })();
-
-    return () => {
-      controller.abort();
-      const v = video.current;
-      v?.srcObject &&
-        (v.srcObject as MediaStream).getTracks().forEach(t => t.stop());
-      setReady(false);
-    };
-  }, [enabled, video]);
 
   return ready;
 }
 
-function useFaceMatcher(modelsReady: boolean) {
+function useCamera(video: React.RefObject<HTMLVideoElement>, active: boolean) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (!active) return;
+    let stream: MediaStream;
+
+    (async () => {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: false
+      });
+      if (!video.current) return;
+
+      video.current.srcObject = stream;
+      video.current.onloadedmetadata = async () => {
+        await video.current!.play();
+        setReady(true);            // <── important, we expose that
+      };
+    })();
+
+    return () => {
+      stream?.getTracks().forEach(t => t.stop());
+      setReady(false);
+    };
+  }, [active, video]);
+
+  return ready;                     //  <── expose readiness flag
+}
+
+function useFaceMatcher(ready: boolean) {
   const [matcher, setMatcher] = useState<faceapi.FaceMatcher | null>(null);
 
   useEffect(() => {
-    if (!modelsReady) return;
-    const db = loadDB();
-    setMatcher(db.length ? new faceapi.FaceMatcher(db, THRESHOLD) : null);
-  }, [modelsReady]);
+    if (ready) setMatcher(loadDB().length ? new faceapi.FaceMatcher(loadDB(), THRESHOLD) : null);
+  }, [ready]);
 
   const add = useCallback((label: string, desc: Float32Array) => {
     saveDescriptor(label, desc);
@@ -125,227 +104,133 @@ function useFaceMatcher(modelsReady: boolean) {
   return { matcher, add };
 }
 
-function useCountdown(start: number, onDone: () => void) {
-  const [seconds, setSeconds] = useState(start);
-
-  useEffect(() => {
-    if (start === 0) return;
-    setSeconds(start);
-  }, [start]);
-
-  useEffect(() => {
-    if (seconds === 0) return;
-    const id = setTimeout(() => {
-      if (seconds === 1) onDone();
-      else setSeconds(s => s - 1);
-    }, 1000);
-    return () => clearTimeout(id);
-  }, [seconds, onDone]);
-
-  return seconds;
-}
-
-/* ───────────────── App ───────────────── */
-enum Phase {
-  LoadingModels,
-  Camera,
-  Detecting,
-  Frozen
-}
-
+/* ──────────────── App ──────────────── */
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const { ready: modelsReady, error: modelErr } = useModels();
-  const [appErr, setAppErr] = useState<string | null>(modelErr);
-  const [phase, setPhase] = useState<Phase>(Phase.LoadingModels);
+  const modelsReady = useModels();
+  const { matcher, add } = useFaceMatcher(modelsReady);
+  const [dialog, setDialog] = useState<'ask' | 'greet' | null>(null);
+  const [pendingDesc, setDesc] = useState<Float32Array | null>(null);
+  const [name, setName] = useState('');
+  const [input, setInput] = useState('');
+  /* camera runs whenever no dialog is open */
+  const camReady = useCamera(videoRef, modelsReady && dialog === null);
 
-  /* name & descriptor we’re working with right now */
-  const [pendingDesc, setPendingDesc] = useState<Float32Array | null>(null);
-  const [recognizedName, setRecognizedName] = useState<string | null>(null);
-  /* dialog */
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<'name' | 'info' | null>(null);
-  const [inputName, setInputName] = useState('');
-
-  /* matcher */
-  const { matcher, add: addDescriptor } = useFaceMatcher(modelsReady);
-  /* camera */
-  const cameraReady = useCamera(
-    videoRef,
-    phase === Phase.Camera || phase === Phase.Detecting
-  );
-  /* countdown */
-  const countdown = useCountdown(
-    phase === Phase.Frozen && !dialogOpen ? COUNTDOWN_SEC : 0,
-    () => restart()
-  );
-
-  /* ─── Side effects ─── */
-  /* once models are ready switch to Camera phase */
+  /* auto-close greet dialog after DIALOG_MS */
   useEffect(() => {
-    if (modelsReady) setPhase(Phase.Camera);
-  }, [modelsReady]);
-
-  /* switch from camera → detecting once video plays */
+    if (dialog !== 'greet') return;
+    const id = setTimeout(() => closeDialog(), DIALOG_MS);
+    return () => clearTimeout(id);
+  }, [dialog]);
+  /* draw & detect loop */
   useEffect(() => {
-    if (cameraReady) setPhase(Phase.Detecting);
-  }, [cameraReady]);
+    if (!modelsReady || !camReady || dialog) return;
 
-  /* detection loop */
-  useEffect(() => {
-    if (phase !== Phase.Detecting) return;
+    const v = videoRef.current;
+    const c = canvasRef.current;
+    if (!v || !c) return;
 
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return;
+    let raf = 0;
+    const ctx = c.getContext('2d')!;
 
-    const ctx = canvas.getContext('2d')!;
-    let rafId = 0;
-    let busy = false;
-
-    const step = async () => {
-      if (canvas.width !== video.videoWidth) canvas.width = video.videoWidth;
-      if (canvas.height !== video.videoHeight) canvas.height = video.videoHeight;
-
-      if (!busy) {
-        busy = true;
-        try {
-          const det = await faceapi
-            .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-            .withFaceLandmarks()
-            .withFaceDescriptor();
-
-          if (det) {
-            /* draw immediately */
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const resized = faceapi.resizeResults(det, {
-              width: video.videoWidth,
-              height: video.videoHeight
-            });
-            faceapi.draw.drawDetections(canvas, resized);
-            faceapi.draw.drawFaceLandmarks(canvas, resized);
-
-            const desc = det.descriptor as Float32Array;
-            let label = 'unknown';
-
-            if (matcher) {
-              const best = matcher.findBestMatch(desc);
-              if (best.distance <= THRESHOLD && best.label !== 'unknown')
-                label = best.label;
-            } if (label === 'unknown') {
-              setPendingDesc(desc);
-              setDialogMode('name');   // ⇒ "Give this face a name"
-              setDialogOpen(true);
-            } else {
-              setRecognizedName(label);
-              setDialogMode('info');   // ⇒ "Hi Alice, we know you!"
-              setDialogOpen(true);
-            }
-
-            /* freeze */
-            video.pause();
-            (video.srcObject as MediaStream)
-              .getTracks()
-              .forEach(t => t.stop());
-            setPhase(Phase.Frozen);
-            return;
-          }
-        } catch (e: any) {
-          setAppErr(e.message);
-        } finally {
-          busy = false;
-        }
+    const tick = async () => {
+      // bail out quietly until video really has dimensions
+      if (!v.videoWidth || !v.videoHeight) {
+        raf = requestAnimationFrame(tick);
+        return;
       }
-      rafId = requestAnimationFrame(step);
+
+      // keep canvas in sync with the video element
+      if (c.width !== v.videoWidth) c.width = v.videoWidth;
+      if (c.height !== v.videoHeight) c.height = v.videoHeight;
+
+      const res = await faceapi
+        .detectSingleFace(v, DETECTOR_OPTS)
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      ctx.clearRect(0, 0, c.width, c.height);
+
+      if (res) {
+        const sized = faceapi.resizeResults(res, { width: v.videoWidth, height: v.videoHeight });
+        faceapi.draw.drawDetections(c, sized);
+        faceapi.draw.drawFaceLandmarks(c, sized);
+
+        v.pause(); // freeze frame while interacting with user
+
+        const desc = res.descriptor as Float32Array;
+        const best = matcher?.findBestMatch(desc);
+
+        if (!best || best.label === 'unknown' || best.distance > THRESHOLD) {
+          setDesc(desc);
+          setDialog('ask');
+        } else {
+          setName(best.label);
+          setDialog('greet');
+        }
+        return;        // stop loop until dialog closes
+      }
+      raf = requestAnimationFrame(tick);
     };
 
-    rafId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafId);
-  }, [phase, matcher]);
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [modelsReady, camReady, matcher, dialog]);
 
-  /* ─── handlers ─── */  const restart = useCallback(() => {
-    const c = canvasRef.current;
-    c?.getContext('2d')?.clearRect(0, 0, c.width, c.height);
-    setRecognizedName(null);
-    setDialogOpen(false);
-    setDialogMode(null);
-    setPhase(Phase.Camera); // this will re-open camera through hook
-  }, []);
-  const handleSaveName = () => {
-    if (!pendingDesc) return;
-    const clean = (inputName || `person_${Date.now()}`).trim();
-    addDescriptor(clean, pendingDesc);
-
-    setRecognizedName(clean);
-    setInputName('');
-    setPendingDesc(null);
-    setDialogOpen(false);   // closing the dialog lets the countdown start
-    setDialogMode(null);
+  /* helpers */
+  const resumeCamera = () => {
+    const v = videoRef.current;
+    v?.play().catch(() => void 0);
   };
 
-  /* ─── UI ─── */
+  const closeDialog = () => {
+    setDialog(null);
+    setName('');
+    setInput('');
+    setDesc(null);
+    resumeCamera();
+  };
+
+  const saveName = () => {
+    if (!pendingDesc) return;
+    const label = (input || `person_${Date.now()}`).trim();
+    add(label, pendingDesc);
+    setName(label);
+    setDialog('greet');          // switch to greet → auto-close 5 s
+  };
+
+  /* ──────────────── UI ──────────────── */
   return (
     <div className="flex h-screen w-screen flex-col items-center justify-center bg-black">
       <div className="relative w-full max-w-xl">
         <video ref={videoRef} className="w-full" autoPlay playsInline muted />
-        <canvas
-          ref={canvasRef}
-          className="absolute inset-0 h-full w-full pointer-events-none"
-        />
+        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
       </div>
 
-      {appErr && <p className="mt-4 text-red-500">{appErr}</p>}
-      {phase === Phase.LoadingModels && (
-        <p className="mt-4 text-white">Loading face detector…</p>
-      )}      {phase === Phase.Frozen && !dialogOpen && (
-        <Button
-          onClick={restart}
-          className="absolute mt-6 rounded-none uppercase text-white bg-emerald-500"
-        >
-          {recognizedName
-            ? `${recognizedName} · detect`
-            : `detect (${countdown})`}
-        </Button>
-      )}      {/* ─── Dialog ─── */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* ─── Dialog ─── */}
+      <Dialog open={dialog !== null} onOpenChange={val => !val && closeDialog()}>
         <DialogContent className="sm:max-w-xs">
           <DialogHeader>
             <DialogTitle>
-              {dialogMode === 'info'
-                ? `Hello, ${recognizedName}!`
-                : 'Name this face'}
+              {dialog === 'ask' ? 'Name this face' : `Hello, ${name}!`}
             </DialogTitle>
           </DialogHeader>
-          {dialogMode === 'name' && (
+
+          {dialog === 'ask' && (
             <>
               <Input
                 autoFocus
                 placeholder="Type a name…"
-                value={inputName}
-                onChange={e => setInputName(e.currentTarget.value)}
+                value={input}
+                onChange={e => setInput(e.currentTarget.value)}
                 className="mt-4"
               />
-              <DialogFooter className="mt-4">
-                <Button onClick={handleSaveName} className="w-full">
-                  Save
-                </Button>
-              </DialogFooter>
-            </>
-          )}
-          {dialogMode === 'info' && (
-            <DialogFooter className="mt-4">
-              <Button
-                onClick={() => {
-                  setDialogOpen(false);
-                  setDialogMode(null);
-                }}
-                className="w-full"
-              >
-                OK
+              <Button onClick={saveName} className="w-full mt-4">
+                Save
               </Button>
-            </DialogFooter>
+            </>
           )}
         </DialogContent>
       </Dialog>
