@@ -1,228 +1,93 @@
-// App.tsx
-import { useRef, useEffect, useState, useCallback } from 'react';
 import * as faceapi from 'face-api.js';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+import { useRef, useEffect, useState } from 'react';
 
-/* ───────────────── Constants ───────────────── */
-const MODEL_URI = '/models';
-const LOCAL_KEY = 'face_descriptors_v1';
-const THRESHOLD = 0.55;
-const DIALOG_MS = 5_000;               // auto-close delay
-
-const DETECTOR_OPTS = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 160,       // much faster, good enough for webcam
-  scoreThreshold: 0.4   // slightly more tolerant
-});
-
-/* ──────────────── Local‑storage helpers ──────────────── */
-type Raw = { label: string; descriptors: number[][] };
-
-const loadDB = (): faceapi.LabeledFaceDescriptors[] =>
-  (JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]') as Raw[]).map(r =>
-    new faceapi.LabeledFaceDescriptors(
-      r.label,
-      r.descriptors.map(d => new Float32Array(d))
-    )
-  );
-
-const saveDescriptor = (label: string, desc: Float32Array) => {
-  const db: Raw[] = JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]');
-  const record = db.find(r => r.label === label);
-  if (record) {
-    record.descriptors.push(Array.from(desc));
-  } else {
-    db.push({ label, descriptors: [Array.from(desc)] });
-  }
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(db));
-};
-
-/* ──────────────── Hooks ──────────────── */
-function useModels() {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    (async () => {
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URI),
-        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URI),
-        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URI)
-      ]);
-      setReady(true);
-    })();
-  }, []);
-
-  return ready;
-}
-
-function useCamera(video: React.RefObject<HTMLVideoElement | null>, active: boolean) {
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    if (!active) return;
-    let stream: MediaStream;
-
-    (async () => {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
-        audio: false
-      });
-      if (!video.current) return;
-
-      video.current.srcObject = stream;
-      video.current.onloadedmetadata = async () => {
-        await video.current!.play();
-        setReady(true);            // <── important, we expose that
-      };
-    })();
-
-    return () => {
-      stream?.getTracks().forEach(t => t.stop());
-      setReady(false);
-    };
-  }, [active, video]);
-
-  return ready;                     //  <── expose readiness flag
-}
-
-function useFaceMatcher(ready: boolean) {
-  const [matcher, setMatcher] = useState<faceapi.FaceMatcher | null>(null);
-
-  useEffect(() => {
-    if (ready) setMatcher(loadDB().length ? new faceapi.FaceMatcher(loadDB(), THRESHOLD) : null);
-  }, [ready]);
-
-  const add = useCallback((label: string, desc: Float32Array) => {
-    saveDescriptor(label, desc);
-    setMatcher(new faceapi.FaceMatcher(loadDB(), THRESHOLD));
-  }, []);
-
-  return { matcher, add };
-}
-
-/* ──────────────── App ──────────────── */
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [result, setResult] = useState<string>('');
 
-  const modelsReady = useModels();
-  const { matcher, add } = useFaceMatcher(modelsReady);
-  const [dialog, setDialog] = useState<'ask' | 'greet' | null>(null);
-  const [pendingDesc, setDesc] = useState<Float32Array | null>(null);
-  const [name, setName] = useState('');
-  const [input, setInput] = useState('');
-  /* camera runs whenever no dialog is open */
-  const camReady = useCamera(videoRef, modelsReady && dialog === null);
-
-  /* auto‑close greet dialog after DIALOG_MS */
   useEffect(() => {
-    if (dialog !== 'greet') return;
-    const id = setTimeout(() => closeDialog(), DIALOG_MS);
-    return () => clearTimeout(id);
-  }, [dialog]);
+    // Load models
+    Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+      faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
+      faceapi.nets.faceRecognitionNet.loadFromUri('/models')
+    ]).then(() => setLoaded(true));
+  }, []);
 
-  /* detect loop (no canvas needed) */
   useEffect(() => {
-    if (!modelsReady || !camReady || dialog) return;
-
-    const v = videoRef.current;
-    if (!v) return;
-
-    let raf = 0;
-
-    const tick = async () => {
-      // bail out quietly until video has dimensions
-      if (!v.videoWidth || !v.videoHeight) {
-        raf = requestAnimationFrame(tick);
-        return;
+    // Setup camera
+    navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+    }).then(stream => {
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        video.onloadedmetadata = () => video.play().catch(console.error);
       }
+    }).catch(err => alert(`Camera error: ${err.message}`));
+  }, []);
 
-      const res = await faceapi
-        .detectSingleFace(v, DETECTOR_OPTS)
-        .withFaceLandmarks()
-        .withFaceDescriptor();
+  useEffect(() => {
+    if (!loaded || result) return;
 
-      if (res) {
-        v.pause(); // freeze frame while interacting with user
+    const detect = async () => {
+      const video = videoRef.current;
+      if (!video?.videoWidth) return requestAnimationFrame(detect);
 
-        const desc = res.descriptor as Float32Array;
-        const best = matcher?.findBestMatch(desc);
+      try {
+        const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks().withFaceDescriptor();
 
-        if (!best || best.label === 'unknown' || best.distance > THRESHOLD) {
-          setDesc(desc);
-          setDialog('ask');
-        } else {
-          setName(best.label);
-          setDialog('greet');
+        if (!face) return requestAnimationFrame(detect);
+
+        const faces = JSON.parse(localStorage.getItem('faces') || '[]');
+        let name = null;
+
+        // Try to match existing faces
+        if (faces.length) {
+          const descriptors = faces.map(({ name, descriptor }: any) =>
+            new faceapi.LabeledFaceDescriptors(name, [new Float32Array(descriptor)]));
+
+          const match = new faceapi.FaceMatcher(descriptors, 0.6).findBestMatch(face.descriptor);
+          if (match.label !== 'unknown') name = match.label;
         }
-        return;        // stop loop until dialog closes
+
+        // Prompt for new face
+        if (!name && (name = prompt('Enter name:'))) {
+          localStorage.setItem('faces', JSON.stringify([...faces, { name, descriptor: Array.from(face.descriptor) }]));
+        }
+
+        name ? setResult(name) : requestAnimationFrame(detect);
+      } catch {
+        requestAnimationFrame(detect);
       }
-      raf = requestAnimationFrame(tick);
     };
 
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [modelsReady, camReady, matcher, dialog]);
+    detect();
+  }, [loaded, result]);
 
-  /* helpers */
-  const resumeCamera = () => {
-    const v = videoRef.current;
-    v?.play().catch(() => void 0);
-  };
+  if (!loaded) return <div className="flex h-screen items-center justify-center bg-black text-white text-3xl">Loading...</div>;
 
-  const closeDialog = () => {
-    setDialog(null);
-    setName('');
-    setInput('');
-    setDesc(null);
-    resumeCamera();
-  };
-
-  const saveName = () => {
-    if (!pendingDesc) return;
-    const label = (input || `person_${Date.now()}`).trim();
-    add(label, pendingDesc);
-    setName(label);
-    setDialog('greet');          // switch to greet → auto‑close 5 s
-  };
-
-  /* ──────────────── UI ──────────────── */
   return (
-    <div className="flex h-screen w-screen flex-col items-center justify-center bg-black">
-      <div className="relative w-full max-w-xl">
-        <video ref={videoRef} className="w-full" autoPlay playsInline muted />
-      </div>
-
-      {/* ─── Dialog ─── */}
-      <Dialog open={dialog !== null} onOpenChange={val => !val && closeDialog()}>
-        <DialogContent className="sm:max-w-xs">
-          <DialogHeader>
-            <DialogTitle>
-              {dialog === 'ask' ? 'Name this face' : `Hello, ${name}!`}
-            </DialogTitle>
-          </DialogHeader>
-
-          {dialog === 'ask' && (
-            <>
-              <Input
-                autoFocus
-                placeholder="Type a name…"
-                value={input}
-                onChange={e => setInput(e.currentTarget.value)}
-                className="mt-4"
-              />
-              <Button onClick={saveName} className="w-full mt-4">
-                Save
-              </Button>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+    <div className="flex h-screen items-center justify-center bg-black relative">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        width="1280"
+        height="720"
+        className="max-w-full max-h-full object-cover"
+        style={{ display: 'block' }}
+      />
+      {result && (
+        <div className="absolute inset-0 bg-blue-500/90 flex flex-col items-center justify-center text-white cursor-pointer"
+          onClick={() => setResult('')}>
+          <h2 className="text-4xl font-bold">Welcome {result}!</h2>
+          <p className="mt-4">Tap to detect again</p>
+        </div>
+      )}
     </div>
   );
 }
