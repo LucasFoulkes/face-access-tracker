@@ -4,6 +4,7 @@ import { useRef, useEffect, useState } from 'react';
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loaded, setLoaded] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [result, setResult] = useState<string>('');
 
   useEffect(() => {
@@ -16,17 +17,35 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!loaded || result) return;
+
+    let stream: MediaStream;
+
     // Setup camera
     navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
-    }).then(stream => {
+      video: { facingMode: 'user' },
+      audio: false
+    }).then(mediaStream => {
+      stream = mediaStream;
       const video = videoRef.current;
       if (video) {
         video.srcObject = stream;
-        video.onloadedmetadata = () => video.play().catch(console.error);
+        video.onloadedmetadata = async () => {
+          try {
+            await video.play();
+            setCameraReady(true);
+          } catch (err) {
+            console.error('Video play failed:', err);
+          }
+        };
       }
     }).catch(err => alert(`Camera error: ${err.message}`));
-  }, []);
+
+    return () => {
+      stream?.getTracks().forEach(track => track.stop());
+      setCameraReady(false);
+    };
+  }, [loaded, result]);
 
   useEffect(() => {
     if (!loaded || result) return;
