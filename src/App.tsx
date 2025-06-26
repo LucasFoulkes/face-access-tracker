@@ -65,7 +65,7 @@ export default function App() {
           const descriptors = faces.map(({ name, descriptor }: any) =>
             new faceapi.LabeledFaceDescriptors(name, [new Float32Array(descriptor)]));
 
-          const match = new faceapi.FaceMatcher(descriptors, 0.6).findBestMatch(face.descriptor);
+          const match = new faceapi.FaceMatcher(descriptors, 0.8).findBestMatch(face.descriptor);
           if (match.label !== 'unknown') name = match.label;
         }
 
