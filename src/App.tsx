@@ -4,7 +4,6 @@ import { useRef, useEffect, useState } from 'react';
 export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [loaded, setLoaded] = useState(false);
-  const [cameraReady, setCameraReady] = useState(false);
   const [result, setResult] = useState<string>('');
 
   useEffect(() => {
@@ -33,7 +32,6 @@ export default function App() {
         video.onloadedmetadata = async () => {
           try {
             await video.play();
-            setCameraReady(true);
           } catch (err) {
             console.error('Video play failed:', err);
           }
@@ -43,7 +41,6 @@ export default function App() {
 
     return () => {
       stream?.getTracks().forEach(track => track.stop());
-      setCameraReady(false);
     };
   }, [loaded, result]);
 
