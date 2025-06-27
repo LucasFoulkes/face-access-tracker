@@ -8,7 +8,7 @@ import { Download, Plus } from 'lucide-react';
 import SmartTable from '@/components/SmartTable';
 import { userStorage } from '@/services/userStorage';
 
-export default function Admin() {
+export default function Tables() {
     const [users, setUsers] = useState<any[]>([]);
     const [entries, setEntries] = useState<any[]>([]);
     const [groups, setGroups] = useState<any[]>([]);
@@ -348,7 +348,7 @@ export default function Admin() {
     };
 
     const exportData = () => {
-        const data = { users, entries, exportedAt: new Date().toISOString() };
+        const data = { users, entries, groups, schedules, exportedAt: new Date().toISOString() };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -358,15 +358,15 @@ export default function Admin() {
     };
 
     return (
-        <div className="container mx-auto p-6 space-y-6">
+        <>
             {loading ? (
                 <div className="flex justify-center items-center h-64">
                     <div className="text-lg">Loading...</div>
                 </div>
             ) : (
                 <>
-                    <div className="flex justify-between items-center">
-                        <h1 className="text-3xl font-bold">Face Access Admin</h1>
+                    <div className="flex justify-between items-center mb-6">
+                        <h1 className="text-3xl font-bold">Data Tables</h1>
                         <Button onClick={exportData} className="flex items-center gap-2">
                             <Download className="w-4 h-4" />
                             Export Data
@@ -626,6 +626,6 @@ export default function Admin() {
                     </Dialog>
                 </>
             )}
-        </div>
+        </>
     );
 }

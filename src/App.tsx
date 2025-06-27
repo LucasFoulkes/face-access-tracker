@@ -1,8 +1,12 @@
 import { useRef, useEffect, useState } from 'react';
-import { Routes, Route } from 'react-router';
+import { Routes, Route, Navigate, Outlet } from 'react-router';
 import { userStorage } from './services/userStorage';
 import { detectFace, findFaceMatch, loadFaceModels } from './services/faceRecognition';
-import Admin from './pages/admin';
+import { AppSidebar } from './components/app-sidebar';
+import { SidebarProvider, SidebarInset, SidebarTrigger } from './components/ui/sidebar';
+import Tables from './pages/admin/tables';
+import Actions from './pages/admin/actions';
+import Reports from './pages/admin/reports';
 
 function FaceDetection() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -182,11 +186,34 @@ function FaceDetection() {
   );
 }
 
+// Admin Layout Component
+function AdminLayout() {
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <div className="flex flex-1 flex-col gap-4 p-4">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger />
+            <div className="h-px bg-border flex-1" />
+          </div>
+          <Outlet />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<FaceDetection />} />
-      <Route path="/admin" element={<Admin />} />
+      <Route path="/admin" element={<AdminLayout />}>
+        <Route index element={<Navigate to="/admin/tables" replace />} />
+        <Route path="tables" element={<Tables />} />
+        <Route path="actions" element={<Actions />} />
+        <Route path="reports" element={<Reports />} />
+      </Route>
     </Routes>
   );
 }

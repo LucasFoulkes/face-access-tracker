@@ -7,6 +7,7 @@ interface User {
     name: string;
     cedula: string;
     pin: string;
+    group_id?: string;
     createdAt: string;
 }
 
@@ -22,6 +23,24 @@ interface Entry {
     userId: string;
     timestamp: string;
     method: 'face' | 'pin' | 'cedula' | 'register';
+}
+
+interface Group {
+    id: string;
+    group_name: string;
+    group_id: string;
+    hourly_rate: number;
+    createdAt: string;
+}
+
+interface Schedule {
+    id: string;
+    schedule_id: string;
+    group_id: string;
+    start_hour: string;
+    end_hour: string;
+    total_hours: number;
+    createdAt: string;
 }
 
 // User data management with localStorage - reliable and simple
@@ -44,6 +63,17 @@ export const userStorage = {
             return entries ? JSON.parse(entries) : [];
         } catch (error) {
             console.error('Error getting entries:', error);
+            return [];
+        }
+    },
+
+    // Get all groups
+    getGroups: async (): Promise<Group[]> => {
+        try {
+            const groups = localStorage.getItem('groups');
+            return groups ? JSON.parse(groups) : [];
+        } catch (error) {
+            console.error('Error getting groups:', error);
             return [];
         }
     },
@@ -83,6 +113,18 @@ export const userStorage = {
         return id;
     },
 
+    generateUniqueGroupId: async (): Promise<string> => {
+        const groups = await userStorage.getGroups();
+        const usedIds = new Set(groups.map(g => g.group_id));
+
+        let id;
+        do {
+            id = `GRP-${Math.floor(1000 + Math.random() * 9000).toString()}`; // GRP-XXXX format
+        } while (usedIds.has(id));
+
+        return id;
+    },
+
     // Create or update user
     saveUser: async (userData: Omit<User, 'createdAt'>): Promise<string> => {
         try {
@@ -105,6 +147,59 @@ export const userStorage = {
             return user.id;
         } catch (error) {
             console.error('Error saving user:', error);
+            throw error;
+        }
+    },
+
+    // Create or update group
+    saveGroup: async (groupData: Omit<Group, 'createdAt' | 'id'>): Promise<string> => {
+        try {
+            const groups = await userStorage.getGroups();
+            const id = Date.now().toString(); // Simple ID for groups
+            const group: Group = {
+                id,
+                ...groupData,
+                createdAt: new Date().toISOString()
+            };
+
+            groups.push(group);
+            localStorage.setItem('groups', JSON.stringify(groups));
+            console.log('Group saved:', group);
+            return group.id;
+        } catch (error) {
+            console.error('Error saving group:', error);
+            throw error;
+        }
+    },
+
+    // Update existing group
+    updateGroup: async (groupId: string, updates: Partial<Omit<Group, 'id'>>): Promise<void> => {
+        try {
+            const groups = await userStorage.getGroups();
+            const groupIndex = groups.findIndex(g => g.id === groupId);
+
+            if (groupIndex >= 0) {
+                groups[groupIndex] = { ...groups[groupIndex], ...updates };
+                localStorage.setItem('groups', JSON.stringify(groups));
+                console.log('Group updated:', groups[groupIndex]);
+            } else {
+                throw new Error('Group not found');
+            }
+        } catch (error) {
+            console.error('Error updating group:', error);
+            throw error;
+        }
+    },
+
+    // Delete group
+    deleteGroup: async (groupId: string): Promise<void> => {
+        try {
+            const groups = await userStorage.getGroups();
+            const updatedGroups = groups.filter(g => g.id !== groupId);
+            localStorage.setItem('groups', JSON.stringify(updatedGroups));
+            console.log('Group deleted:', groupId);
+        } catch (error) {
+            console.error('Error deleting group:', error);
             throw error;
         }
     },
@@ -265,6 +360,85 @@ export const userStorage = {
         }
     },
 
+    generateUniqueScheduleId: async (): Promise<string> => {
+        try {
+            const schedules = await userStorage.getSchedules();
+            const usedIds = new Set(schedules.map(s => s.group_id));
+
+            let scheduleId;
+            do {
+                scheduleId = `SCH-${Math.floor(100 + Math.random() * 900)}`;
+            } while (usedIds.has(scheduleId));
+
+            return scheduleId;
+        } catch (error) {
+            console.error('Error generating unique schedule ID:', error);
+            throw error;
+        }
+    },
+
+    // Schedule management
+    getSchedules: async (): Promise<Schedule[]> => {
+        try {
+            const schedules = localStorage.getItem('schedules');
+            return schedules ? JSON.parse(schedules) : [];
+        } catch (error) {
+            console.error('Error getting schedules:', error);
+            return [];
+        }
+    }, saveSchedule: async (scheduleData: Omit<Schedule, 'id' | 'schedule_id' | 'createdAt'>): Promise<string> => {
+        try {
+            const schedules = await userStorage.getSchedules();
+            const scheduleId = crypto.randomUUID();
+            const scheduleUniqueId = await userStorage.generateUniqueScheduleId();
+
+            const schedule: Schedule = {
+                id: scheduleId,
+                schedule_id: scheduleUniqueId,
+                ...scheduleData,
+                createdAt: new Date().toISOString()
+            };
+
+            schedules.push(schedule);
+            localStorage.setItem('schedules', JSON.stringify(schedules));
+            console.log('Schedule saved:', schedule);
+            return schedule.id;
+        } catch (error) {
+            console.error('Error saving schedule:', error);
+            throw error;
+        }
+    },
+
+    updateSchedule: async (scheduleId: string, updates: Partial<Omit<Schedule, 'id'>>): Promise<void> => {
+        try {
+            const schedules = await userStorage.getSchedules();
+            const scheduleIndex = schedules.findIndex(s => s.id === scheduleId);
+
+            if (scheduleIndex >= 0) {
+                schedules[scheduleIndex] = { ...schedules[scheduleIndex], ...updates };
+                localStorage.setItem('schedules', JSON.stringify(schedules));
+                console.log('Schedule updated:', schedules[scheduleIndex]);
+            } else {
+                throw new Error('Schedule not found');
+            }
+        } catch (error) {
+            console.error('Error updating schedule:', error);
+            throw error;
+        }
+    },
+
+    deleteSchedule: async (scheduleId: string): Promise<void> => {
+        try {
+            const schedules = await userStorage.getSchedules();
+            const updatedSchedules = schedules.filter(s => s.id !== scheduleId);
+            localStorage.setItem('schedules', JSON.stringify(updatedSchedules));
+            console.log('Schedule deleted:', scheduleId);
+        } catch (error) {
+            console.error('Error deleting schedule:', error);
+            throw error;
+        }
+    },
+
     // Legacy compatibility methods for existing code
     get: async () => {
         const users = await userStorage.getUsers();
@@ -285,6 +459,8 @@ export const userStorage = {
             localStorage.removeItem('users');
             localStorage.removeItem('face_descriptors');
             localStorage.removeItem('entries');
+            localStorage.removeItem('groups');
+            localStorage.removeItem('schedules');
             console.log('All data cleared');
         } catch (error) {
             console.error('Error clearing all data:', error);
