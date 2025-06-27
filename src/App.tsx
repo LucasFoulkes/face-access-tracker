@@ -48,11 +48,13 @@ function FaceDetection() {
       try {
         const face = await detectFace(video);
         if (face) {
-          const knownName = findFaceMatch(face.descriptor);
+          const knownName = await findFaceMatch(face.descriptor);
           if (knownName) {
-            const user = userStorage.findByName(knownName);
-            userStorage.logEntry(user.id, 'face');
-            setWelcomeName(knownName);
+            const user = await userStorage.findByName(knownName);
+            if (user) {
+              await userStorage.logEntry(user.id, 'face');
+              setWelcomeName(knownName);
+            }
           } else {
             setCurrentFace(face);
             setShowOptions(true);
@@ -75,12 +77,12 @@ function FaceDetection() {
     setNewUser(null);
   };
 
-  const handlePinLogin = () => {
+  const handlePinLogin = async () => {
     const pin = prompt('Enter your 4-digit PIN:');
     if (pin?.length === 4) {
-      const user = userStorage.findByPin(pin);
+      const user = await userStorage.findByPin(pin);
       if (user) {
-        userStorage.logEntry(user.id, 'pin');
+        await userStorage.logEntry(user.id, 'pin');
         setWelcomeName(user.name);
       } else {
         alert('Invalid PIN');
@@ -89,12 +91,12 @@ function FaceDetection() {
     setShowOptions(false);
   };
 
-  const handleCedulaLogin = () => {
+  const handleCedulaLogin = async () => {
     const cedula = prompt('Enter your 10-digit cedula:');
     if (cedula?.length === 10) {
-      const user = userStorage.findByCedula(cedula);
+      const user = await userStorage.findByCedula(cedula);
       if (user) {
-        userStorage.logEntry(user.id, 'cedula');
+        await userStorage.logEntry(user.id, 'cedula');
         setWelcomeName(user.name);
       } else {
         alert('Invalid cedula');
@@ -103,7 +105,7 @@ function FaceDetection() {
     setShowOptions(false);
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     const name = prompt('Enter your name:');
     if (!name) return setShowOptions(false);
 
@@ -113,14 +115,14 @@ function FaceDetection() {
       return setShowOptions(false);
     }
 
-    if (userStorage.findByCedula(cedula)) {
+    const existingUser = await userStorage.findByCedula(cedula);
+    if (existingUser) {
       // Check if user wants to add another face descriptor
-      const existingUser = userStorage.findByCedula(cedula);
       const addMore = confirm(`Cedula belongs to ${existingUser.name}. Add another face for better recognition?`);
 
       if (addMore) {
-        userStorage.add(existingUser.name, cedula, existingUser.pin, currentFace.descriptor);
-        userStorage.logEntry(existingUser.id, 'face');
+        await userStorage.add(existingUser.name, cedula, existingUser.pin, currentFace.descriptor);
+        await userStorage.logEntry(existingUser.id, 'face');
         setWelcomeName(existingUser.name);
         setShowOptions(false);
         return;
@@ -130,9 +132,9 @@ function FaceDetection() {
       }
     }
 
-    const pin = userStorage.generateUniquePin();
-    const id = userStorage.add(name, cedula, pin, currentFace.descriptor);
-    userStorage.logEntry(id, 'register');
+    const pin = await userStorage.generateUniquePin();
+    const id = await userStorage.add(name, cedula, pin, currentFace.descriptor);
+    await userStorage.logEntry(id, 'register');
 
     setNewUser({ name, pin, id });
     setShowOptions(false);

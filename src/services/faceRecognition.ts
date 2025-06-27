@@ -18,11 +18,11 @@ export const detectFace = async (video: HTMLVideoElement) => {
     }
 };
 
-export const findFaceMatch = (descriptor: Float32Array) => {
-    const faces = userStorage.get();
-    if (!faces.length) return null;
-
+export const findFaceMatch = async (descriptor: Float32Array) => {
     try {
+        const faces = await userStorage.get();
+        if (!faces.length) return null;
+
         const labeledDescriptors = faces.map(({ name, descriptors }: any) =>
             new faceapi.LabeledFaceDescriptors(
                 name,

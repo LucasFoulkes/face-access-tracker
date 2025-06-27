@@ -1,29 +1,19 @@
-import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Trash2, Search } from 'lucide-react';
+import { Trash2, Edit } from 'lucide-react';
 
 interface SmartTableProps {
     data: any[];
-    searchPlaceholder: string;
     onDelete?: (item: any, index: number) => void;
+    onEdit?: (item: any, index: number) => void;
 }
 
-export default function SmartTable({ data, searchPlaceholder, onDelete }: SmartTableProps) {
-    const [search, setSearch] = useState('');
-
+export default function SmartTable({ data, onDelete, onEdit }: SmartTableProps) {
     if (!data.length) return <div className="p-8 text-center text-muted-foreground">No data found</div>;
 
     // Get all possible keys from the data
     const allKeys = Array.from(new Set(data.flatMap(item => Object.keys(item))));
-
-    // Smart search across all fields
-    const filteredData = data.filter(item =>
-        Object.values(item).some(value =>
-            String(value).toLowerCase().includes(search.toLowerCase())
-        )
-    );
+    const hasActions = onDelete || onEdit;
 
     // Smart value renderer
     const renderValue = (value: any) => {
@@ -40,61 +30,62 @@ export default function SmartTable({ data, searchPlaceholder, onDelete }: SmartT
     };
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center space-x-2">
-                <Search className="w-4 h-4 text-muted-foreground" />
-                <Input
-                    placeholder={searchPlaceholder}
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="max-w-sm"
-                />
-            </div>
-
-            <div className="rounded-md border">
-                <div className="overflow-x-auto">
+        <div className="rounded-md border overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full">
                     {/* Header */}
-                    <div className="border-b bg-muted/50 min-w-max">
-                        <div className="flex">
+                    <thead className="bg-muted/50 border-b">
+                        <tr>
                             {allKeys.map(key => (
-                                <div key={key} className="p-3 font-medium text-sm text-muted-foreground min-w-32 border-r last:border-r-0">
+                                <th key={key} className="p-3 text-left font-medium text-sm text-muted-foreground border-r last:border-r-0">
                                     {key}
-                                </div>
+                                </th>
                             ))}
-                            {onDelete && <div className="p-3 font-medium text-sm text-muted-foreground w-20">Actions</div>}
-                        </div>
-                    </div>
+                            {hasActions && (
+                                <th className="p-3 text-left font-medium text-sm text-muted-foreground w-32">
+                                    Actions
+                                </th>
+                            )}
+                        </tr>
+                    </thead>
 
                     {/* Body */}
-                    <div className="divide-y min-w-max">
-                        {filteredData.length === 0 ? (
-                            <div className="p-8 text-center text-muted-foreground">
-                                No results for "{search}"
-                            </div>
-                        ) : (
-                            filteredData.map((item, index) => (
-                                <div key={index} className="flex hover:bg-muted/50">
-                                    {allKeys.map(key => (
-                                        <div key={key} className="p-3 text-sm min-w-32 border-r last:border-r-0">
-                                            {renderValue(item[key] || '-')}
+                    <tbody className="divide-y">
+                        {data.map((item, index) => (
+                            <tr key={index} className="hover:bg-muted/50">
+                                {allKeys.map(key => (
+                                    <td key={key} className="p-3 text-sm border-r last:border-r-0">
+                                        {renderValue(item[key] || '-')}
+                                    </td>
+                                ))}
+                                {hasActions && (
+                                    <td className="p-3 w-32">
+                                        <div className="flex gap-1">
+                                            {onEdit && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => onEdit(item, index)}
+                                                >
+                                                    <Edit className="w-4 h-4" />
+                                                </Button>
+                                            )}
+                                            {onDelete && (
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    onClick={() => onDelete(item, index)}
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            )}
                                         </div>
-                                    ))}
-                                    {onDelete && (
-                                        <div className="p-3 w-20">
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={() => onDelete(item, index)}
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </div>
-                                    )}
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
+                                    </td>
+                                )}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
