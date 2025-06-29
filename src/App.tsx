@@ -335,7 +335,7 @@ export default function App() {
       {result && (
         <div className="absolute inset-0 bg-blue-500/90 flex flex-col items-center justify-center text-white cursor-pointer"
           onClick={() => setResult('')}>
-          <h2 className="text-4xl font-bold">Welcome {result}!</h2>
+          <h2 className="text-4xl font-bold capitalize">Welcome {result}!</h2>
           <p className="mt-4">Tap to detect again</p>
         </div>
       )}
