@@ -119,3 +119,8 @@
     @apply bg-background text-foreground;
   }
 }
+
+#root {
+  margin: 0 auto;
+  text-align: center;
+}
