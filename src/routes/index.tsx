@@ -113,7 +113,7 @@ const findWorkerByFace = async (faceDescriptor: Float32Array): Promise<WorkerPro
         new faceapi.LabeledFaceDescriptors(fd.worker_id, [new Float32Array(fd.descriptor)])
     );
 
-    const match = new faceapi.FaceMatcher(labeledDescriptors, 0.6).findBestMatch(faceDescriptor);
+    const match = new faceapi.FaceMatcher(labeledDescriptors, 0.5).findBestMatch(faceDescriptor);
     return match.label !== 'unknown' ? await db.worker_profiles.get(match.label) || null : null;
 };
 
@@ -124,7 +124,6 @@ function App() {
     const [videoReady, setVideoReady] = useState(false); // Add video ready state
     const [result, setResult] = useState('');
     const [showDialog, setShowDialog] = useState(false);
-    const [showNewFaceDialog, setShowNewFaceDialog] = useState(false);
     const [showPinDialog, setShowPinDialog] = useState(false);
     const [pinInput, setPinInput] = useState('');
     const [currentFace, setCurrentFace] = useState<Float32Array | null>(null);
@@ -230,11 +229,13 @@ function App() {
     }, [modelsLoaded]);
 
     useEffect(() => {
-        if (!modelsLoaded || !videoReady || result || showNewFaceDialog) return;
+        if (!modelsLoaded || !videoReady || result || showPinDialog) return;
 
         addDebug('Auto detection starting - models and video ready');
         let isDetecting = false;
         let detectionAttempts = 0;
+        let consecutiveDetections: (WorkerProfile | null)[] = []; // Store last 3 detections
+        let lastFaceDescriptor: Float32Array | null = null;
         const isIPhone = /iPhone/i.test(navigator.userAgent);
 
         const detect = async () => {
@@ -269,19 +270,70 @@ function App() {
                     addDebug(`AUTO: Face detected! Score: ${face.detection.score.toFixed(3)}`);
 
                     const worker = await findWorkerByFace(face.descriptor);
-                    if (worker) {
-                        addDebug(`AUTO: Worker found: ${worker.nombres}`);
-                        setRecognizedWorker(worker);
-                        setResult(`${worker.nombres} ${worker.apellidos}`);
-                        setCountdown(3);
-                        return; // Stop detection
-                    } else {
-                        addDebug('AUTO: Face not in database - showing dialog');
-                        setCurrentFace(face.descriptor);
-                        setShowNewFaceDialog(true);
-                        return; // Stop detection
+
+                    // Add this detection to our consecutive detections array
+                    consecutiveDetections.push(worker);
+                    lastFaceDescriptor = face.descriptor;
+
+                    // Keep only the last 3 detections
+                    if (consecutiveDetections.length > 3) {
+                        consecutiveDetections.shift();
+                    }
+
+                    addDebug(`Consecutive detections: ${consecutiveDetections.length}/3`);
+
+                    // Check if we have 3 detections
+                    if (consecutiveDetections.length === 3) {
+                        // Count occurrences of each worker (including null for unknown faces)
+                        const workerCounts = new Map<string, { worker: WorkerProfile | null, count: number }>();
+
+                        consecutiveDetections.forEach(w => {
+                            const key = w?.id || 'unknown';
+                            const existing = workerCounts.get(key);
+                            if (existing) {
+                                existing.count++;
+                            } else {
+                                workerCounts.set(key, { worker: w, count: 1 });
+                            }
+                        });
+
+                        // Find the most frequent detection
+                        let mostFrequent: { worker: WorkerProfile | null, count: number } | null = null;
+                        for (const entry of workerCounts.values()) {
+                            if (!mostFrequent || entry.count > mostFrequent.count) {
+                                mostFrequent = entry;
+                            }
+                        }
+
+                        if (mostFrequent && mostFrequent.count >= 2) {
+                            // 2 or more detections of the same person/unknown
+                            if (mostFrequent.worker) {
+                                addDebug(`AUTO: Confirmed worker: ${mostFrequent.worker.nombres} (${mostFrequent.count}/3 detections)`);
+                                setRecognizedWorker(mostFrequent.worker);
+                                setResult(`${mostFrequent.worker.nombres} ${mostFrequent.worker.apellidos}`);
+                                setCountdown(3);
+                                return; // Stop detection
+                            } else {
+                                addDebug(`AUTO: Confirmed unknown face (${mostFrequent.count}/3 detections) - showing PIN dialog`);
+                                setCurrentFace(lastFaceDescriptor);
+                                setShowPinDialog(true);
+                                return; // Stop detection
+                            }
+                        } else {
+                            // All 3 detections were different people - treat as unknown
+                            addDebug('AUTO: 3 different detections - treating as unknown face');
+                            setCurrentFace(lastFaceDescriptor);
+                            setShowPinDialog(true);
+                            return; // Stop detection
+                        }
                     }
                 } else {
+                    // No face detected - reset consecutive detections
+                    if (consecutiveDetections.length > 0) {
+                        addDebug('AUTO: No face - resetting consecutive detections');
+                        consecutiveDetections = [];
+                    }
+
                     // Only log no face every 50 attempts to reduce spam
                     if (detectionAttempts % 50 === 0) {
                         addDebug(`AUTO: No face detected (attempt ${detectionAttempts})`);
@@ -289,10 +341,11 @@ function App() {
                 }
             } catch (error) {
                 addDebug(`AUTO ERROR: ${error instanceof Error ? error.message : 'Unknown'}`);
+                // Reset on error
+                consecutiveDetections = [];
             }
 
             isDetecting = false;
-
 
             // Continue detection loop
             const delay = isIPhone ? 300 : 100;
@@ -306,7 +359,7 @@ function App() {
         return () => {
             addDebug('Auto detection cleanup');
         };
-    }, [modelsLoaded, videoReady, result, showNewFaceDialog]);
+    }, [modelsLoaded, videoReady, result, showPinDialog]);
 
     useEffect(() => {
         if (!countdown || countdown <= 0) return;
@@ -351,11 +404,6 @@ function App() {
     const handleRegisterFace = async () => {
         if (!currentFace) return;
         setShowDialog(false);
-        setShowPinDialog(true);
-    };
-
-    const handleRegisterNewFace = async () => {
-        setShowNewFaceDialog(false);
         setShowPinDialog(true);
     };
 
@@ -465,8 +513,8 @@ function App() {
                 style={{ display: 'block', transform: 'scaleX(-1)' }}
                 onClick={() => {
                     // Allow manual login if no result is showing and no dialog is open
-                    if (!result && !showNewFaceDialog && !showDialog) {
-                        setShowNewFaceDialog(true);
+                    if (!result && !showPinDialog && !showDialog) {
+                        setShowPinDialog(true);
                     }
                 }}
             />
@@ -521,42 +569,10 @@ function App() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={showNewFaceDialog} onOpenChange={setShowNewFaceDialog}>
-                <DialogContent className="sm:max-w-md bg-white">
-                    <DialogHeader>
-                        <DialogTitle>Iniciar Sesión</DialogTitle>
-                    </DialogHeader>
-                    <div className="flex flex-col gap-4">
-                        <p className="text-sm text-gray-600">
-                            {currentFace
-                                ? "Hemos detectado un rostro que no está registrado en el sistema."
-                                : "Ingrese su PIN o cédula para iniciar sesión manualmente."
-                            }
-                        </p>
-                        <Button
-                            className="h-16 text-xl"
-                            onClick={handleRegisterNewFace}
-                        >
-                            {currentFace ? "Registrar con PIN/Cédula" : "Ingresar PIN/Cédula"}
-                        </Button>
-                        <Button
-                            variant="outline"
-                            className="h-16 text-xl"
-                            onClick={() => {
-                                setShowNewFaceDialog(false);
-                                setCurrentFace(null);
-                            }}
-                        >
-                            Cancelar
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
-
             <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
                 <DialogContent className="sm:max-w-md bg-white">
                     <DialogHeader>
-                        <DialogTitle>Ingrese PIN o Cédula</DialogTitle>
+                        <DialogTitle>Iniciar Sesión</DialogTitle>
                     </DialogHeader>
                     <div className="flex flex-col gap-4">
                         <div className="space-y-2">
