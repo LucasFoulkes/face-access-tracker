@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { FileSpreadsheet, Upload, UserPlus } from 'lucide-react'
+import { FileSpreadsheet, Upload, UserPlus, Trash2 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { db, syncToSupabase } from '@/database'
 import { WorkerProfile } from '@/types'
@@ -20,6 +20,7 @@ interface ColumnMapping {
 function Acciones() {
     const [dialogOpen, setDialogOpen] = useState(false)
     const [singleWorkerDialogOpen, setSingleWorkerDialogOpen] = useState(false)
+    const [deleteDbDialogOpen, setDeleteDbDialogOpen] = useState(false)
     const [excelData, setExcelData] = useState<ExcelData[]>([])
     const [excelColumns, setExcelColumns] = useState<string[]>([])
     const [columnMapping, setColumnMapping] = useState<ColumnMapping>({})
@@ -406,6 +407,27 @@ function Acciones() {
         }
     }
 
+    const handleDeleteDatabase = async () => {
+        if (!window.confirm('⚠️ ADVERTENCIA: Esta acción eliminará TODOS los registros de reconocimiento.\n\nLos trabajadores y descriptores faciales se mantendrán intactos.\n\n¿Estás seguro de que quieres continuar?')) {
+            return
+        }
+
+        setIsProcessing(true)
+        try {
+            // Only delete recognitions table, keep workers and face descriptors
+            await db.recognitions.clear()
+
+            alert('Registros de reconocimiento eliminados exitosamente.')
+
+        } catch (error) {
+            console.error('Error deleting recognitions:', error)
+            alert('Error al eliminar los registros de reconocimiento')
+        } finally {
+            setIsProcessing(false)
+            setDeleteDbDialogOpen(false)
+        }
+    }
+
     return (
         <div className="h-full flex flex-col items-center justify-center p-6">
             <div className="text-center mb-8">
@@ -655,6 +677,58 @@ function Acciones() {
                                 disabled={isProcessing || !singleWorkerForm.nombres || !singleWorkerForm.apellidos || !singleWorkerForm.cedula}
                             >
                                 {isProcessing ? 'Agregando...' : 'Agregar Trabajador'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Delete Database Dialog */}
+                <Dialog open={deleteDbDialogOpen} onOpenChange={setDeleteDbDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button
+                            size="lg"
+                            className="w-64 h-64 flex flex-col items-center justify-center text-lg font-semibold gap-4"
+                            variant="destructive"
+                        >
+                            <Trash2 className="h-16 w-16" />
+                            Limpiar Registros
+                            <span className="text-sm font-normal">Borrar reconocimientos</span>
+                        </Button>
+                    </DialogTrigger>
+
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle className="text-red-600">Limpiar Registros de Reconocimiento</DialogTitle>
+                            <DialogDescription>
+                                Esta acción eliminará permanentemente todos los registros de reconocimiento facial, pero mantendrá intactos los trabajadores y sus descriptores faciales.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4">
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                <h4 className="font-semibold text-red-800 mb-2">⚠️ Advertencia</h4>
+                                <ul className="text-sm text-red-700 space-y-1">
+                                    <li>• Se eliminarán todos los registros de reconocimiento</li>
+                                    <li>• Se perderá el historial de asistencia</li>
+                                    <li>• Los trabajadores y rostros registrados se mantendrán</li>
+                                    <li>• Esta acción NO se puede deshacer</li>
+                                </ul>
+                            </div>
+                            <p className="text-sm text-gray-600">
+                                Útil para limpiar datos de prueba o reiniciar el historial de asistencia.
+                            </p>
+                        </div>
+
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setDeleteDbDialogOpen(false)}>
+                                Cancelar
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={handleDeleteDatabase}
+                                disabled={isProcessing}
+                            >
+                                {isProcessing ? 'Limpiando...' : 'Limpiar Registros'}
                             </Button>
                         </DialogFooter>
                     </DialogContent>
