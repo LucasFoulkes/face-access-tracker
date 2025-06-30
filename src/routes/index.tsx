@@ -244,10 +244,13 @@ function App() {
                 // iPhone-optimized detection options
                 const options = new faceapi.TinyFaceDetectorOptions({
                     inputSize: isIPhone ? 320 : 416,  // Smaller input for iPhone
-                    scoreThreshold: isIPhone ? 0.2 : 0.3  // Lower threshold for iPhone
+                    scoreThreshold: isIPhone ? 0.1 : 0.3  // Much lower threshold for iPhone
                 });
 
-                addDebug(`Using inputSize: ${options.inputSize}, threshold: ${options.scoreThreshold}`);
+                // Only log occasionally to avoid performance issues
+                if (detectionCount === 1) {
+                    addDebug(`Using inputSize: ${options.inputSize}, threshold: ${options.scoreThreshold}`);
+                }
 
                 const face = await faceapi.detectSingleFace(video, options)
                     .withFaceLandmarks()
@@ -255,8 +258,8 @@ function App() {
 
                 if (face) {
                     const now = Date.now();
-                    if (now - lastFaceTime > 1000) { // More frequent face detection messages
-                        addDebug(`Face detected! Score: ${face.detection.score.toFixed(3)}, Descriptor length: ${face.descriptor.length}`);
+                    if (now - lastFaceTime > 2000) { // Less frequent face detection messages
+                        addDebug(`Face detected! Score: ${face.detection.score.toFixed(3)}, Descriptor: ${face.descriptor.length}`);
                         lastFaceTime = now;
                     }
 
@@ -277,18 +280,20 @@ function App() {
                         return;
                     }
                 } else {
-                    if (detectionCount % 100 === 0) {
+                    // Reduce logging frequency dramatically to improve performance
+                    if (detectionCount % 200 === 0) {
                         addDebug('No face detected in frame');
                     }
                 }
             } catch (error) {
-                if (detectionCount % 50 === 0) { // Show errors more frequently
+                // Reduce error logging frequency to improve performance
+                if (detectionCount % 100 === 0) {
                     addDebug(`Detection error: ${error instanceof Error ? error.message : 'Unknown'}`);
                 }
             }
 
             // Add longer delay for iPhone to prevent overwhelming the device
-            const delay = isIPhone ? 100 : 50;
+            const delay = isIPhone ? 200 : 50; // Increased delay for iPhone
             setTimeout(() => requestAnimationFrame(detect), delay);
         };
 
@@ -520,6 +525,44 @@ function App() {
                                 }}
                             >
                                 Test Models
+                            </button>
+                            <button
+                                className="bg-purple-600 text-white px-2 py-1 rounded text-xs"
+                                onClick={async () => {
+                                    const video = videoRef.current;
+                                    if (video) {
+                                        addDebug('Manual face detection attempt...');
+                                        try {
+                                            const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
+                                                inputSize: 320,
+                                                scoreThreshold: 0.1
+                                            }))
+                                                .withFaceLandmarks()
+                                                .withFaceDescriptor();
+
+                                            if (face) {
+                                                addDebug(`Manual: Face found! Score: ${face.detection.score.toFixed(3)}`);
+                                                const worker = await findWorkerByFace(face.descriptor);
+                                                if (worker) {
+                                                    addDebug(`Manual: Worker found: ${worker.nombres}`);
+                                                    setRecognizedWorker(worker);
+                                                    setResult(`${worker.nombres} ${worker.apellidos}`);
+                                                    setCountdown(3);
+                                                } else {
+                                                    addDebug('Manual: Face not in database - showing dialog');
+                                                    setCurrentFace(face.descriptor);
+                                                    setShowNewFaceDialog(true);
+                                                }
+                                            } else {
+                                                addDebug('Manual: No face detected');
+                                            }
+                                        } catch (err) {
+                                            addDebug(`Manual error: ${err instanceof Error ? err.message : 'Unknown'}`);
+                                        }
+                                    }
+                                }}
+                            >
+                                Manual Detect
                             </button>
                         </div>
                     )}
