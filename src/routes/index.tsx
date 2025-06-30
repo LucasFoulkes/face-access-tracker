@@ -6,6 +6,8 @@ import { db, initDatabase, syncToSupabase, syncFromSupabase, logRecognition } fr
 import { WorkerProfile } from '../types';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 
 const loadModels = async () => {
     try {
@@ -123,6 +125,8 @@ function App() {
     const [result, setResult] = useState('');
     const [showDialog, setShowDialog] = useState(false);
     const [showNewFaceDialog, setShowNewFaceDialog] = useState(false);
+    const [showPinDialog, setShowPinDialog] = useState(false);
+    const [pinInput, setPinInput] = useState('');
     const [currentFace, setCurrentFace] = useState<Float32Array | null>(null);
     const [recognizedWorker, setRecognizedWorker] = useState<WorkerProfile | null>(null);
     const [countdown, setCountdown] = useState<number | null>(null);
@@ -346,40 +350,20 @@ function App() {
 
     const handleRegisterFace = async () => {
         if (!currentFace) return;
-
-        const identifier = prompt('Rostro no reconocido. Ingrese PIN o cédula:');
-        if (!identifier) {
-            setShowDialog(false);
-            return;
-        }
-
-        const existingWorker = await db.worker_profiles
-            .where('pin').equals(identifier)
-            .or('cedula').equals(identifier)
-            .first();
-
-        if (existingWorker) {
-            await db.face_descriptors.add({
-                id: crypto.randomUUID(),
-                worker_id: existingWorker.id,
-                descriptor: Array.from(currentFace)
-            });
-
-            await syncToSupabase();
-            await logRecognition(existingWorker.id);
-            setResult(`${existingWorker.nombres} ${existingWorker.apellidos}`);
-            setShowDialog(false);
-        } else {
-            alert('Trabajador no encontrado con ese PIN o cédula');
-            setShowDialog(false);
-        }
+        setShowDialog(false);
+        setShowPinDialog(true);
     };
 
     const handleRegisterNewFace = async () => {
-        const identifier = prompt('Ingrese PIN o cédula para iniciar sesión:');
+        setShowNewFaceDialog(false);
+        setShowPinDialog(true);
+    };
+
+    const handlePinSubmit = async () => {
+        const identifier = pinInput.trim();
         if (!identifier) {
-            setShowNewFaceDialog(false);
-            setCurrentFace(null);
+            setShowPinDialog(false);
+            setPinInput('');
             return;
         }
 
@@ -404,11 +388,13 @@ function App() {
             setResult(`${existingWorker.nombres} ${existingWorker.apellidos}`);
             setRecognizedWorker(existingWorker);
             setCountdown(3);
-            setShowNewFaceDialog(false);
+            setShowPinDialog(false);
+            setPinInput('');
             setCurrentFace(null);
         } else {
             alert('Trabajador no encontrado con ese PIN o cédula');
-            setShowNewFaceDialog(false);
+            setShowPinDialog(false);
+            setPinInput('');
             setCurrentFace(null);
         }
     };
@@ -558,6 +544,53 @@ function App() {
                             className="h-16 text-xl"
                             onClick={() => {
                                 setShowNewFaceDialog(false);
+                                setCurrentFace(null);
+                            }}
+                        >
+                            Cancelar
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showPinDialog} onOpenChange={setShowPinDialog}>
+                <DialogContent className="sm:max-w-md bg-white">
+                    <DialogHeader>
+                        <DialogTitle>Ingrese PIN o Cédula</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="pin-input">PIN o Cédula</Label>
+                            <Input
+                                id="pin-input"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                placeholder="Ingrese su PIN o cédula"
+                                value={pinInput}
+                                onChange={(e) => setPinInput(e.target.value)}
+                                className="h-16 text-xl text-center"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        handlePinSubmit();
+                                    }
+                                }}
+                            />
+                        </div>
+                        <Button
+                            className="h-16 text-xl"
+                            onClick={handlePinSubmit}
+                            disabled={!pinInput.trim()}
+                        >
+                            Confirmar
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="h-16 text-xl"
+                            onClick={() => {
+                                setShowPinDialog(false);
+                                setPinInput('');
                                 setCurrentFace(null);
                             }}
                         >
