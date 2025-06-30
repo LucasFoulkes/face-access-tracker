@@ -13,7 +13,7 @@ export interface WorkerProfile {
     departamento: string;
     cargo: string;
     activo: boolean;
-    internal_id: number;
+    internal_id: number | null;
 }
 
 export interface Recognition {

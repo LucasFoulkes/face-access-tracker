@@ -47,8 +47,18 @@ const syncTableToSupabase = async <T extends Record<string, any>>(
             ? newData.map(({ id, worker_id }) => ({ id, worker_id }))
             : newData;
 
+        console.log(`=== SYNCING ${tableName.toUpperCase()} ===`);
+        console.log('Data being sent to Supabase:', cleanData);
+        if (tableName === 'worker_profiles' && cleanData.length > 0) {
+            console.log('First worker internal_id:', (cleanData[0] as any)?.internal_id);
+        }
+        console.log('=== END SYNC DATA ===');
+
         const { error } = await supabase.from(tableName).insert(cleanData);
-        if (error) console.error(`${tableName} sync error:`, error);
+        if (error) {
+            console.error(`${tableName} sync error:`, error);
+            throw error;
+        }
     }
 };
 

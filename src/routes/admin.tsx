@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, redirect, useLocation } from '@tanstack/react-router'
-import { BarChart3, FileText, Settings } from "lucide-react"
+import { BarChart3, FileText, Settings, ChevronLeft } from "lucide-react"
 import {
     Sidebar,
     SidebarContent,
@@ -13,6 +13,8 @@ import {
     SidebarGroupLabel,
     SidebarGroupContent,
     SidebarInset,
+    SidebarHeader,
+    SidebarFooter,
 } from '@/components/ui/sidebar'
 import {
     Breadcrumb,
@@ -58,9 +60,27 @@ function AdminLayout() {
     return (
         <SidebarProvider>
             <Sidebar collapsible="icon">
+                <SidebarHeader>
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton
+                                size="lg"
+                                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                            >
+                                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                                    <Settings className="h-4 w-4" />
+                                </div>
+                                <div className="grid flex-1 text-left text-sm leading-tight">
+                                    <span className="truncate font-medium">Admin</span>
+                                    <span className="truncate text-xs">Panel de Control</span>
+                                </div>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                </SidebarHeader>
                 <SidebarContent>
                     <SidebarGroup>
-                        <SidebarGroupLabel>Application</SidebarGroupLabel>
+                        <SidebarGroupLabel>Navigation</SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
                                 {items.map((item) => (
@@ -77,9 +97,31 @@ function AdminLayout() {
                         </SidebarGroupContent>
                     </SidebarGroup>
                 </SidebarContent>
+                <SidebarFooter>
+                    <SidebarMenu>
+                        <SidebarMenuItem>
+                            <SidebarMenuButton
+                                size="lg"
+                                asChild
+                            >
+                                <Link to="/">
+                                    <div className="flex items-center gap-2 w-full">
+                                        <div className="bg-muted text-muted-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                                            <ChevronLeft className="h-4 w-4" />
+                                        </div>
+                                        <div className="grid flex-1 text-left text-sm leading-tight">
+                                            <span className="truncate font-medium">Volver</span>
+                                            <span className="truncate text-xs">Ir al inicio</span>
+                                        </div>
+                                    </div>
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    </SidebarMenu>
+                </SidebarFooter>
                 <SidebarRail />
             </Sidebar>
-            <SidebarInset>
+            <SidebarInset className='flex-1 flex flex-col h-screen'>
                 <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
                     <div className="flex items-center gap-2 px-4">
                         <SidebarTrigger className="-ml-1" />
@@ -102,7 +144,7 @@ function AdminLayout() {
                         </Breadcrumb>
                     </div>
                 </header>
-                <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+                <div className="flex flex-1 flex-col p-4 overflow-hidden pt-0">
                     <Outlet />
                 </div>
             </SidebarInset>

@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import * as faceapi from 'face-api.js';
 import { useRef, useEffect, useState } from 'react';
 import { db, initDatabase, syncToSupabase, syncFromSupabase, logRecognition } from '../database';
@@ -25,6 +25,7 @@ const findWorkerByFace = async (faceDescriptor: Float32Array): Promise<WorkerPro
 };
 
 function App() {
+    const navigate = useNavigate()
     const videoRef = useRef<HTMLVideoElement>(null);
     const [modelsLoaded, setModelsLoaded] = useState(false);
     const [result, setResult] = useState('');
@@ -97,7 +98,15 @@ function App() {
 
         const timer = setTimeout(() => {
             if (countdown === 1) {
-                if (recognizedWorker) logRecognition(recognizedWorker.id);
+                if (recognizedWorker) {
+                    logRecognition(recognizedWorker.id);
+
+                    // Check if worker has admin role and redirect
+                    if (recognizedWorker.cargo === 'admin') {
+                        navigate({ to: '/admin' });
+                        return;
+                    }
+                }
                 setResult('');
                 setRecognizedWorker(null);
                 setCountdown(null);
@@ -107,10 +116,18 @@ function App() {
         }, 1000);
 
         return () => clearTimeout(timer);
-    }, [countdown, recognizedWorker]);
+    }, [countdown, recognizedWorker, navigate]);
 
     const handleWelcomeClick = async () => {
-        if (recognizedWorker) await logRecognition(recognizedWorker.id);
+        if (recognizedWorker) {
+            await logRecognition(recognizedWorker.id);
+
+            // Check if worker has admin role and redirect
+            if (recognizedWorker.cargo === 'admin') {
+                navigate({ to: '/admin' });
+                return;
+            }
+        }
         setResult('');
         setRecognizedWorker(null);
         setCountdown(null);
