@@ -30,6 +30,7 @@ function App() {
     const [modelsLoaded, setModelsLoaded] = useState(false);
     const [result, setResult] = useState('');
     const [showDialog, setShowDialog] = useState(false);
+    const [showNewFaceDialog, setShowNewFaceDialog] = useState(false);
     const [currentFace, setCurrentFace] = useState<Float32Array | null>(null);
     const [recognizedWorker, setRecognizedWorker] = useState<WorkerProfile | null>(null);
     const [countdown, setCountdown] = useState<number | null>(null);
@@ -46,7 +47,7 @@ function App() {
     }, []);
 
     useEffect(() => {
-        if (!modelsLoaded || result) return;
+        if (!modelsLoaded) return;
 
         let stream: MediaStream;
         navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
@@ -61,10 +62,10 @@ function App() {
             .catch(err => alert(`Error de cámara: ${err.message}`));
 
         return () => stream?.getTracks().forEach(track => track.stop());
-    }, [modelsLoaded, result]);
+    }, [modelsLoaded]);
 
     useEffect(() => {
-        if (!modelsLoaded || result) return;
+        if (!modelsLoaded || result || showNewFaceDialog) return;
 
         const detect = async () => {
             const video = videoRef.current;
@@ -80,8 +81,14 @@ function App() {
                         setRecognizedWorker(worker);
                         setResult(`${worker.nombres} ${worker.apellidos}`);
                         setCountdown(3);
+                        // Detection stops here - result is set
+                        return;
                     } else {
+                        // Face not recognized - show dialog and stop detection
                         setCurrentFace(face.descriptor);
+                        setShowNewFaceDialog(true);
+                        // Detection stops here - dialog is shown
+                        return;
                     }
                 }
             } catch {
@@ -91,7 +98,7 @@ function App() {
         };
 
         detect();
-    }, [modelsLoaded, result]);
+    }, [modelsLoaded, result, showNewFaceDialog]);
 
     useEffect(() => {
         if (!countdown || countdown <= 0) return;
@@ -164,6 +171,40 @@ function App() {
         }
     };
 
+    const handleRegisterNewFace = async () => {
+        if (!currentFace) return;
+
+        const identifier = prompt('Rostro no reconocido. Ingrese PIN o cédula para registrar:');
+        if (!identifier) {
+            setShowNewFaceDialog(false);
+            setCurrentFace(null);
+            return;
+        }
+
+        const existingWorker = await db.worker_profiles
+            .where('pin').equals(identifier)
+            .or('cedula').equals(identifier)
+            .first();
+
+        if (existingWorker) {
+            await db.face_descriptors.add({
+                id: crypto.randomUUID(),
+                worker_id: existingWorker.id,
+                descriptor: Array.from(currentFace)
+            });
+
+            await syncToSupabase();
+            await logRecognition(existingWorker.id);
+            setResult(`${existingWorker.nombres} ${existingWorker.apellidos}`);
+            setShowNewFaceDialog(false);
+            setCurrentFace(null);
+        } else {
+            alert('Trabajador no encontrado con ese PIN o cédula');
+            setShowNewFaceDialog(false);
+            setCurrentFace(null);
+        }
+    };
+
     if (!modelsLoaded) {
         return <div className="flex h-screen items-center justify-center bg-black text-white text-3xl">Loading...</div>;
     }
@@ -225,6 +266,35 @@ function App() {
                         </Button>
                         <Button className="h-16 text-xl" onClick={handleRegisterFace}>
                             Cédula
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showNewFaceDialog} onOpenChange={setShowNewFaceDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Rostro no reconocido</DialogTitle>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-4">
+                        <p className="text-sm text-gray-600">
+                            Hemos detectado un rostro que no está registrado en el sistema.
+                        </p>
+                        <Button
+                            className="h-16 text-xl"
+                            onClick={handleRegisterNewFace}
+                        >
+                            Registrar con PIN/Cédula
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="h-16 text-xl"
+                            onClick={() => {
+                                setShowNewFaceDialog(false);
+                                setCurrentFace(null);
+                            }}
+                        >
+                            Cancelar
                         </Button>
                     </div>
                 </DialogContent>
