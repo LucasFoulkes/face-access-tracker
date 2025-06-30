@@ -37,9 +37,21 @@ function App() {
 
     // Add debug state for mobile debugging
     const [debugInfo, setDebugInfo] = useState<string[]>([]);
+    const [deviceInfo, setDeviceInfo] = useState('');
+
     const addDebug = (message: string) => {
         setDebugInfo(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${message}`]);
     };
+
+    // Detect device type for iPhone-specific handling
+    useEffect(() => {
+        const userAgent = navigator.userAgent;
+        const isIPhone = /iPhone/i.test(userAgent);
+        const isSafari = /Safari/i.test(userAgent) && !/Chrome/i.test(userAgent);
+        const info = `${isIPhone ? 'iPhone' : 'Other'} - ${isSafari ? 'Safari' : 'Other Browser'}`;
+        setDeviceInfo(info);
+        addDebug(`Device: ${info}`);
+    }, []);
 
     useEffect(() => {
         const initialize = async () => {
@@ -68,14 +80,21 @@ function App() {
         let stream: MediaStream;
         addDebug('Setting up camera...');
 
-        navigator.mediaDevices.getUserMedia({
+        // iPhone-specific camera constraints
+        const isIPhone = /iPhone/i.test(navigator.userAgent);
+        const constraints = {
             video: {
                 facingMode: 'user',
-                width: { ideal: 640 },
-                height: { ideal: 480 }
+                width: isIPhone ? { ideal: 480, max: 640 } : { ideal: 640 },
+                height: isIPhone ? { ideal: 360, max: 480 } : { ideal: 480 },
+                frameRate: isIPhone ? { ideal: 15, max: 30 } : { ideal: 30 }
             },
             audio: false
-        })
+        };
+
+        addDebug(`Camera constraints: ${JSON.stringify(constraints.video)}`);
+
+        navigator.mediaDevices.getUserMedia(constraints)
             .then(mediaStream => {
                 stream = mediaStream;
                 const video = videoRef.current;
@@ -83,8 +102,12 @@ function App() {
                     video.srcObject = stream;
                     video.onloadedmetadata = () => {
                         addDebug(`Video ready: ${video.videoWidth}x${video.videoHeight}`);
-                        video.play().catch(err => addDebug(`Play error: ${err.message}`));
+                        // iPhone requires explicit play() call
+                        video.play()
+                            .then(() => addDebug('Video playing successfully'))
+                            .catch(err => addDebug(`Play error: ${err.message}`));
                     };
+                    video.onerror = (err) => addDebug(`Video error: ${err}`);
                 }
             })
             .catch(err => addDebug(`Camera error: ${err.message}`));
@@ -97,29 +120,39 @@ function App() {
 
         let detectionCount = 0;
         let lastFaceTime = 0;
+        const isIPhone = /iPhone/i.test(navigator.userAgent);
 
         const detect = async () => {
             const video = videoRef.current;
-            if (!video?.videoWidth) return requestAnimationFrame(detect);
+            if (!video?.videoWidth || !video?.videoHeight) {
+                return requestAnimationFrame(detect);
+            }
 
             detectionCount++;
             if (detectionCount === 1) {
                 addDebug('Starting face detection loop');
             }
-            if (detectionCount % 50 === 0) { // Show every 50th detection
+            if (detectionCount % 30 === 0) { // Show every 30th detection for more frequent updates
                 addDebug(`Detection attempt #${detectionCount}`);
             }
 
             try {
-                const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
-                    inputSize: 416,
-                    scoreThreshold: 0.3
-                })).withFaceLandmarks().withFaceDescriptor();
+                // iPhone-optimized detection options
+                const options = new faceapi.TinyFaceDetectorOptions({
+                    inputSize: isIPhone ? 320 : 416,  // Smaller input for iPhone
+                    scoreThreshold: isIPhone ? 0.2 : 0.3  // Lower threshold for iPhone
+                });
+
+                addDebug(`Using inputSize: ${options.inputSize}, threshold: ${options.scoreThreshold}`);
+
+                const face = await faceapi.detectSingleFace(video, options)
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
 
                 if (face) {
                     const now = Date.now();
-                    if (now - lastFaceTime > 2000) { // Don't spam face detection messages
-                        addDebug(`Face detected! Score: ${face.detection.score.toFixed(2)}`);
+                    if (now - lastFaceTime > 1000) { // More frequent face detection messages
+                        addDebug(`Face detected! Score: ${face.detection.score.toFixed(3)}, Descriptor length: ${face.descriptor.length}`);
                         lastFaceTime = now;
                     }
 
@@ -139,13 +172,20 @@ function App() {
                         // Detection stops here - dialog is shown
                         return;
                     }
+                } else {
+                    if (detectionCount % 100 === 0) {
+                        addDebug('No face detected in frame');
+                    }
                 }
             } catch (error) {
-                if (detectionCount % 100 === 0) { // Only show errors occasionally
+                if (detectionCount % 50 === 0) { // Show errors more frequently
                     addDebug(`Detection error: ${error instanceof Error ? error.message : 'Unknown'}`);
                 }
             }
-            requestAnimationFrame(detect);
+
+            // Add longer delay for iPhone to prevent overwhelming the device
+            const delay = isIPhone ? 100 : 50;
+            setTimeout(() => requestAnimationFrame(detect), delay);
         };
 
         detect();
@@ -286,11 +326,35 @@ function App() {
 
             {/* Debug overlay - only show when no result */}
             {!result && !showNewFaceDialog && (
-                <div className="absolute top-2 left-2 right-2 bg-black/70 text-white text-xs p-2 rounded max-h-32 overflow-y-auto z-10">
-                    <div className="font-bold mb-1">Debug Info:</div>
-                    {debugInfo.slice(-5).map((info, i) => (
+                <div className="absolute top-2 left-2 right-2 bg-black/70 text-white text-xs p-2 rounded max-h-40 overflow-y-auto z-10">
+                    <div className="font-bold mb-1">Debug Info ({deviceInfo}):</div>
+                    {debugInfo.slice(-6).map((info, i) => (
                         <div key={i}>{info}</div>
                     ))}
+
+                    {/* iPhone test button */}
+                    {/iPhone/i.test(navigator.userAgent) && (
+                        <button
+                            className="mt-2 bg-red-600 text-white px-2 py-1 rounded text-xs"
+                            onClick={async () => {
+                                const video = videoRef.current;
+                                if (video) {
+                                    addDebug(`Test: Video ${video.videoWidth}x${video.videoHeight}, ready: ${video.readyState}`);
+                                    try {
+                                        const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
+                                            inputSize: 320,
+                                            scoreThreshold: 0.1
+                                        }));
+                                        addDebug(`Test result: ${face ? `Face found, score: ${face.score.toFixed(3)}` : 'No face'}`);
+                                    } catch (err) {
+                                        addDebug(`Test error: ${err instanceof Error ? err.message : 'Unknown'}`);
+                                    }
+                                }
+                            }}
+                        >
+                            Test Detection
+                        </button>
+                    )}
                 </div>
             )}
 
