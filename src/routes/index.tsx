@@ -514,7 +514,7 @@ function App() {
             )}
 
             <Dialog open={showDialog} onOpenChange={setShowDialog}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-md bg-white">
                     <DialogHeader>
                         <DialogTitle>¿Qué deseas hacer?</DialogTitle>
                     </DialogHeader>
@@ -538,7 +538,7 @@ function App() {
             </Dialog>
 
             <Dialog open={showNewFaceDialog} onOpenChange={setShowNewFaceDialog}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-md bg-white">
                     <DialogHeader>
                         <DialogTitle>Iniciar Sesión</DialogTitle>
                     </DialogHeader>
