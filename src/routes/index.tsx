@@ -222,30 +222,20 @@ function App() {
     useEffect(() => {
         if (!modelsLoaded || result || showNewFaceDialog) return;
 
-        let detectionCount = 0;
-        let lastFaceTime = 0;
         let isDetecting = false; // Prevent overlapping detections
         const isIPhone = /iPhone/i.test(navigator.userAgent);
 
         const detect = async () => {
             const video = videoRef.current;
             if (!video?.videoWidth || !video?.videoHeight || isDetecting) {
-                setTimeout(() => requestAnimationFrame(detect), isIPhone ? 200 : 50);
+                setTimeout(() => requestAnimationFrame(detect), isIPhone ? 300 : 100);
                 return;
             }
 
             isDetecting = true; // Set detection in progress
 
-            detectionCount++;
-            if (detectionCount === 1) {
-                addDebug('Starting face detection loop');
-            }
-            if (detectionCount % 30 === 0) {
-                addDebug(`Detection attempt #${detectionCount}`);
-            }
-
             try {
-                // Use EXACTLY the same options as manual detection
+                // Use same detection settings that work in manual mode
                 const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
                     inputSize: 320,
                     scoreThreshold: 0.1
@@ -254,50 +244,36 @@ function App() {
                     .withFaceDescriptor();
 
                 if (face) {
-                    const now = Date.now();
-                    if (now - lastFaceTime > 2000) {
-                        addDebug(`Auto: Face found! Score: ${face.detection.score.toFixed(3)}`);
-                        lastFaceTime = now;
-                    }
+                    addDebug(`Face detected! Score: ${face.detection.score.toFixed(3)}`);
 
                     const worker = await findWorkerByFace(face.descriptor);
                     if (worker) {
-                        addDebug(`Auto: Worker found: ${worker.nombres}`);
+                        addDebug(`Worker found: ${worker.nombres}`);
                         setRecognizedWorker(worker);
                         setResult(`${worker.nombres} ${worker.apellidos}`);
                         setCountdown(3);
-                        isDetecting = false;
-                        // Detection stops here - result is set
+                        // Detection stops here - result is set, useEffect dependency will prevent restart
                         return;
                     } else {
-                        addDebug('Auto: Face not in database - showing dialog');
-                        // Face not recognized - show dialog and stop detection
+                        addDebug('Face not in database - showing dialog');
                         setCurrentFace(face.descriptor);
                         setShowNewFaceDialog(true);
-                        isDetecting = false;
-                        // Detection stops here - dialog is shown
+                        // Detection stops here - dialog is shown, useEffect dependency will prevent restart
                         return;
-                    }
-                } else {
-                    // Reduce logging frequency dramatically to improve performance
-                    if (detectionCount % 200 === 0) {
-                        addDebug('Auto: No face detected in frame');
                     }
                 }
             } catch (error) {
-                // Reduce error logging frequency to improve performance
-                if (detectionCount % 100 === 0) {
-                    addDebug(`Auto error: ${error instanceof Error ? error.message : 'Unknown'}`);
-                }
+                addDebug(`Detection error: ${error instanceof Error ? error.message : 'Unknown'}`);
             }
 
             isDetecting = false; // Reset detection flag
 
-            // Add longer delay for iPhone to prevent overwhelming the device
-            const delay = isIPhone ? 300 : 100; // Even longer delay for iPhone
+            // Continue detection loop
+            const delay = isIPhone ? 300 : 100;
             setTimeout(() => requestAnimationFrame(detect), delay);
         };
 
+        addDebug('Starting face detection loop');
         detect();
     }, [modelsLoaded, result, showNewFaceDialog]);
 
@@ -468,9 +444,7 @@ function App() {
                 autoPlay
                 playsInline
                 muted
-                // width="1280"
-                // height="720"
-                className="max-w-full max-h-full object-cover"
+                className="w-full h-full object-cover"
                 style={{ display: 'block', transform: 'scaleX(-1)' }}
             />
 
@@ -481,92 +455,6 @@ function App() {
                     {debugInfo.slice(-6).map((info, i) => (
                         <div key={i}>{info}</div>
                     ))}
-
-                    {/* iPhone test button */}
-                    {/iPhone/i.test(navigator.userAgent) && (
-                        <div className="mt-2 space-x-2">
-                            <button
-                                className="bg-red-600 text-white px-2 py-1 rounded text-xs"
-                                onClick={async () => {
-                                    const video = videoRef.current;
-                                    if (video) {
-                                        addDebug(`Test: Video ${video.videoWidth}x${video.videoHeight}, ready: ${video.readyState}`);
-                                        try {
-                                            const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
-                                                inputSize: 320,
-                                                scoreThreshold: 0.1
-                                            }));
-                                            addDebug(`Test result: ${face ? `Face found, score: ${face.score.toFixed(3)}` : 'No face'}`);
-                                        } catch (err) {
-                                            addDebug(`Test error: ${err instanceof Error ? err.message : 'Unknown'}`);
-                                        }
-                                    }
-                                }}
-                            >
-                                Test Detection
-                            </button>
-                            <button
-                                className="bg-green-600 text-white px-2 py-1 rounded text-xs"
-                                onClick={async () => {
-                                    addDebug('Testing model file accessibility...');
-                                    const modelFiles = [
-                                        'tiny_face_detector_model-weights_manifest.json',
-                                        'face_landmark_68_model-weights_manifest.json',
-                                        'face_recognition_model-weights_manifest.json'
-                                    ];
-
-                                    for (const file of modelFiles.slice(0, 1)) { // Test just one file to avoid spam
-                                        try {
-                                            const response = await fetch(`/models/${file}`, { cache: 'no-cache' });
-                                            addDebug(`${file}: ${response.status} (${response.headers.get('content-length')} bytes)`);
-                                        } catch (err) {
-                                            addDebug(`${file}: FAILED - ${err instanceof Error ? err.message : 'Unknown'}`);
-                                        }
-                                    }
-                                }}
-                            >
-                                Test Models
-                            </button>
-                            <button
-                                className="bg-purple-600 text-white px-2 py-1 rounded text-xs"
-                                onClick={async () => {
-                                    const video = videoRef.current;
-                                    if (video) {
-                                        addDebug('Manual face detection attempt...');
-                                        try {
-                                            const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
-                                                inputSize: 320,
-                                                scoreThreshold: 0.1
-                                            }))
-                                                .withFaceLandmarks()
-                                                .withFaceDescriptor();
-
-                                            if (face) {
-                                                addDebug(`Manual: Face found! Score: ${face.detection.score.toFixed(3)}`);
-                                                const worker = await findWorkerByFace(face.descriptor);
-                                                if (worker) {
-                                                    addDebug(`Manual: Worker found: ${worker.nombres}`);
-                                                    setRecognizedWorker(worker);
-                                                    setResult(`${worker.nombres} ${worker.apellidos}`);
-                                                    setCountdown(3);
-                                                } else {
-                                                    addDebug('Manual: Face not in database - showing dialog');
-                                                    setCurrentFace(face.descriptor);
-                                                    setShowNewFaceDialog(true);
-                                                }
-                                            } else {
-                                                addDebug('Manual: No face detected');
-                                            }
-                                        } catch (err) {
-                                            addDebug(`Manual error: ${err instanceof Error ? err.message : 'Unknown'}`);
-                                        }
-                                    }
-                                }}
-                            >
-                                Manual Detect
-                            </button>
-                        </div>
-                    )}
                 </div>
             )}
 
