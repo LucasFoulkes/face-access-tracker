@@ -113,7 +113,7 @@ const findWorkerByFace = async (faceDescriptor: Float32Array): Promise<WorkerPro
         new faceapi.LabeledFaceDescriptors(fd.worker_id, [new Float32Array(fd.descriptor)])
     );
 
-    const match = new faceapi.FaceMatcher(labeledDescriptors, 0.3).findBestMatch(faceDescriptor);
+    const match = new faceapi.FaceMatcher(labeledDescriptors, 0.4).findBestMatch(faceDescriptor);
     return match.label !== 'unknown' ? await db.worker_profiles.get(match.label) || null : null;
 };
 
