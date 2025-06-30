@@ -111,7 +111,7 @@ const findWorkerByFace = async (faceDescriptor: Float32Array): Promise<WorkerPro
         new faceapi.LabeledFaceDescriptors(fd.worker_id, [new Float32Array(fd.descriptor)])
     );
 
-    const match = new faceapi.FaceMatcher(labeledDescriptors, 0.6).findBestMatch(faceDescriptor);
+    const match = new faceapi.FaceMatcher(labeledDescriptors, 0.9).findBestMatch(faceDescriptor);
     return match.label !== 'unknown' ? await db.worker_profiles.get(match.label) || null : null;
 };
 
@@ -257,10 +257,7 @@ function App() {
             }
 
             try {
-                const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
-                    inputSize: 320,
-                    scoreThreshold: 0.1
-                }))
+                const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({}))
                     .withFaceLandmarks()
                     .withFaceDescriptor();
 
@@ -291,6 +288,7 @@ function App() {
             }
 
             isDetecting = false;
+
 
             // Continue detection loop
             const delay = isIPhone ? 300 : 100;
