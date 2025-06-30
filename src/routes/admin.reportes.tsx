@@ -49,9 +49,19 @@ function Reportes() {
         // Prepare data for Excel export
         const excelData = [];
 
-        // Add header row
-        const headerRow = ['Trabajador', ...weekDays.map(day => formatDate(day))];
-        excelData.push(headerRow);
+        // Create header rows - we need 2 rows for merged cells effect
+        const mainHeaderRow = ['Trabajador'];
+        const subHeaderRow = [''];
+
+        // For each day, add 3 columns: Entrada, Salida, Horas
+        weekDays.forEach(day => {
+            const formattedDate = formatDate(day);
+            mainHeaderRow.push(formattedDate, '', ''); // Date spans 3 columns
+            subHeaderRow.push('Entrada', 'Salida', 'Horas'); // Sub-columns
+        });
+
+        excelData.push(mainHeaderRow);
+        excelData.push(subHeaderRow);
 
         // Add data rows
         filteredAttendanceData.forEach(worker => {
@@ -59,11 +69,13 @@ function Reportes() {
             weekDays.forEach(day => {
                 const dayData = worker.dailyData[day];
                 if (dayData) {
-                    // Combine all attendance info in one cell
-                    const cellValue = `${dayData.firstDetection} - ${dayData.lastDetection} (${dayData.totalTime})`;
-                    row.push(cellValue);
+                    row.push(
+                        dayData.firstDetection,  // Entrada
+                        dayData.lastDetection,   // Salida
+                        dayData.totalTime        // Horas
+                    );
                 } else {
-                    row.push('—');
+                    row.push('—', '—', '—'); // Empty entry, exit, hours
                 }
             });
             excelData.push(row);
@@ -73,12 +85,52 @@ function Reportes() {
         const workbook = XLSX.utils.book_new();
         const worksheet = XLSX.utils.aoa_to_sheet(excelData);
 
-        // Set column widths
+        // Set column widths - Worker name + 3 columns per day
         const colWidths = [
             { wch: 25 }, // Worker name column
-            ...weekDays.map(() => ({ wch: 20 })) // Date columns
+            ...weekDays.flatMap(() => [
+                { wch: 12 }, // Entrada
+                { wch: 12 }, // Salida
+                { wch: 12 }  // Horas
+            ])
         ];
         worksheet['!cols'] = colWidths;
+
+        // Create merged cells for date headers
+        const merges = [];
+        weekDays.forEach((day, dayIndex) => {
+            const startCol = 1 + (dayIndex * 3); // Start after worker name column
+            const endCol = startCol + 2; // Span 3 columns
+
+            // Convert column numbers to Excel column letters
+            const startColLetter = XLSX.utils.encode_col(startCol);
+            const endColLetter = XLSX.utils.encode_col(endCol);
+
+            merges.push({
+                s: { r: 0, c: startCol }, // Start: row 0, calculated column
+                e: { r: 0, c: endCol }    // End: row 0, calculated column + 2
+            });
+        });
+        worksheet['!merges'] = merges;
+
+        // Style the headers
+        const headerStyle = {
+            font: { bold: true },
+            alignment: { horizontal: 'center', vertical: 'center' },
+            fill: { fgColor: { rgb: 'E5E7EB' } }
+        };
+
+        // Apply styles to header rows
+        for (let col = 0; col < mainHeaderRow.length; col++) {
+            const cellAddress1 = XLSX.utils.encode_cell({ r: 0, c: col });
+            const cellAddress2 = XLSX.utils.encode_cell({ r: 1, c: col });
+
+            if (!worksheet[cellAddress1]) worksheet[cellAddress1] = { v: '' };
+            if (!worksheet[cellAddress2]) worksheet[cellAddress2] = { v: '' };
+
+            worksheet[cellAddress1].s = headerStyle;
+            worksheet[cellAddress2].s = headerStyle;
+        }
 
         // Add worksheet to workbook
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Reporte de Asistencia');
@@ -151,7 +203,7 @@ function Reportes() {
                     size="sm"
                     onClick={exportToExcel}
                     disabled={!filteredAttendanceData.length || !weekDays.length}
-                    className="flex items-center gap-1 text-xs px-2 py-1 sm:gap-2 sm:text-sm sm:px-3 sm:py-2"
+                    className="flex items-center gap-1 text-xs px-2 py-1 sm:gap-2 sm:text-sm sm:px-3 sm:py-2 bg-green-600 text-white hover:bg-green-700 border-green-600"
                 >
                     <Download className="h-3 w-3 sm:h-4 sm:w-4" />
                     <span className="hidden sm:inline">Excel</span>
