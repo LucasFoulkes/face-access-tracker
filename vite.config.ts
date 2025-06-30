@@ -16,7 +16,19 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      injectRegister: 'auto', // Changed from false to auto
+
+      pwaAssets: {
+        disabled: false,
+        config: true,
+      },
+
+      manifest: {
+        name: 'face-access-tracker',
+        short_name: 'face-access-tracker',
+        description: 'face-access-tracker',
+        theme_color: '#ffffff',
+      },
 
       workbox: {
         globPatterns: [
@@ -81,45 +93,12 @@ export default defineConfig({
                 maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
               }
             }
-          },
-          // Add runtime caching for app shell (JS/CSS files) with Network First strategy
-          {
-            urlPattern: /\.(?:js|css)$/,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'static-resources',
-              networkTimeoutSeconds: 3,
-            }
           }
         ],
 
         // Ensure navigation requests are handled offline
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/],
-      },
-
-      pwaAssets: {
-        disabled: false,
-        config: true,
-      },
-
-      manifest: {
-        name: 'Face Access Tracker',
-        short_name: 'FaceTracker',
-        description: 'Face recognition access tracking system',
-        theme_color: '#ffffff',
-        start_url: '/',
-        display: 'standalone',
-        background_color: '#000000',
-        orientation: 'portrait',
-        scope: '/',
-        icons: [
-          {
-            src: '/favicon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml'
-          }
-        ]
       },
 
       devOptions: {
