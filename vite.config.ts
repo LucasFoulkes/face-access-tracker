@@ -16,7 +16,7 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto', // Changed from false to auto
+      injectRegister: 'auto',
 
       pwaAssets: {
         disabled: false,
@@ -27,16 +27,15 @@ export default defineConfig({
         name: 'face-access-tracker',
         short_name: 'face-access-tracker',
         description: 'face-access-tracker',
-        theme_color: '#ffffff',
+        theme_color: '#000000', // Changed to black
       },
 
       workbox: {
         globPatterns: [
           '**/*.{js,css,html,svg,png,ico,json,woff,woff2,ttf,eot}',
-          'models/**/*', // Cache all files in models directory regardless of extension
-          'models/*', // Also catch files directly in models folder
+          'models/**/*',
+          'models/*',
         ],
-        // Explicitly include model files without extensions
         additionalManifestEntries: [
           { url: '/models/face_landmark_68_model-shard1', revision: null },
           { url: '/models/face_recognition_model-shard1', revision: null },
@@ -45,10 +44,9 @@ export default defineConfig({
         ],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        skipWaiting: true, // Force immediate activation of new service worker
-        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024, // 50MB for large model files
+        skipWaiting: true,
+        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
 
-        // Add runtime caching for better offline support
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -57,7 +55,7 @@ export default defineConfig({
               cacheName: 'google-fonts-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 365 days
+                maxAgeSeconds: 60 * 60 * 24 * 365
               }
             }
           },
@@ -68,7 +66,7 @@ export default defineConfig({
               cacheName: 'gstatic-fonts-cache',
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 365 days
+                maxAgeSeconds: 60 * 60 * 24 * 365
               }
             }
           },
@@ -79,7 +77,7 @@ export default defineConfig({
               cacheName: 'face-api-models',
               expiration: {
                 maxEntries: 20,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
           },
@@ -90,13 +88,12 @@ export default defineConfig({
               cacheName: 'images-cache',
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
           }
         ],
 
-        // Ensure navigation requests are handled offline
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/],
       },
@@ -116,7 +113,6 @@ export default defineConfig({
   },
   server: {
     fs: {
-      // Allow serving files from the models directory
       allow: ['..', 'public/models']
     }
   }

@@ -378,9 +378,7 @@ function App() {
     };
 
     const handleRegisterNewFace = async () => {
-        if (!currentFace) return;
-
-        const identifier = prompt('Rostro no reconocido. Ingrese PIN o cédula para registrar:');
+        const identifier = prompt('Ingrese PIN o cédula para iniciar sesión:');
         if (!identifier) {
             setShowNewFaceDialog(false);
             setCurrentFace(null);
@@ -393,15 +391,21 @@ function App() {
             .first();
 
         if (existingWorker) {
-            await db.face_descriptors.add({
-                id: crypto.randomUUID(),
-                worker_id: existingWorker.id,
-                descriptor: Array.from(currentFace)
-            });
+            // If we have a face descriptor, register it for future recognition
+            if (currentFace) {
+                await db.face_descriptors.add({
+                    id: crypto.randomUUID(),
+                    worker_id: existingWorker.id,
+                    descriptor: Array.from(currentFace)
+                });
+                await syncToSupabase();
+            }
 
-            await syncToSupabase();
+            // Log the recognition and show welcome screen
             await logRecognition(existingWorker.id);
             setResult(`${existingWorker.nombres} ${existingWorker.apellidos}`);
+            setRecognizedWorker(existingWorker);
+            setCountdown(3);
             setShowNewFaceDialog(false);
             setCurrentFace(null);
         } else {
@@ -473,8 +477,14 @@ function App() {
                 autoPlay
                 playsInline
                 muted
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover cursor-pointer"
                 style={{ display: 'block', transform: 'scaleX(-1)' }}
+                onClick={() => {
+                    // Allow manual login if no result is showing and no dialog is open
+                    if (!result && !showNewFaceDialog && !showDialog) {
+                        setShowNewFaceDialog(true);
+                    }
+                }}
             />
 
             {result && (
@@ -530,17 +540,20 @@ function App() {
             <Dialog open={showNewFaceDialog} onOpenChange={setShowNewFaceDialog}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Rostro no reconocido</DialogTitle>
+                        <DialogTitle>Iniciar Sesión</DialogTitle>
                     </DialogHeader>
                     <div className="flex flex-col gap-4">
                         <p className="text-sm text-gray-600">
-                            Hemos detectado un rostro que no está registrado en el sistema.
+                            {currentFace
+                                ? "Hemos detectado un rostro que no está registrado en el sistema."
+                                : "Ingrese su PIN o cédula para iniciar sesión manualmente."
+                            }
                         </p>
                         <Button
                             className="h-16 text-xl"
                             onClick={handleRegisterNewFace}
                         >
-                            Registrar con PIN/Cédula
+                            {currentFace ? "Registrar con PIN/Cédula" : "Ingresar PIN/Cédula"}
                         </Button>
                         <Button
                             variant="outline"
