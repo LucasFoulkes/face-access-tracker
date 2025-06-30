@@ -31,10 +31,77 @@ export default defineConfig({
       },
 
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico}', 'models/**'],
+        globPatterns: [
+          '**/*.{js,css,html,svg,png,ico,json,woff,woff2,ttf,eot}',
+          'models/**/*', // Cache all files in models directory regardless of extension
+          'models/*', // Also catch files directly in models folder
+        ],
+        // Explicitly include model files without extensions
+        additionalManifestEntries: [
+          { url: '/models/face_landmark_68_model-shard1', revision: null },
+          { url: '/models/face_recognition_model-shard1', revision: null },
+          { url: '/models/face_recognition_model-shard2', revision: null },
+          { url: '/models/tiny_face_detector_model-shard1', revision: null },
+        ],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB to handle large model files
+        skipWaiting: true, // Force immediate activation of new service worker
+        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024, // 50MB for large model files
+
+        // Add runtime caching for better offline support
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 365 days
+              },
+              cacheKeyWillBeUsed: async ({ request }) => {
+                return `${request.url}`
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'gstatic-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 365 days
+              }
+            }
+          },
+          {
+            urlPattern: /\/models\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'face-api-models',
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+              }
+            }
+          },
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'images-cache',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+              }
+            }
+          }
+        ],
+
+        // Ensure navigation requests are handled offline
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/],
       },
 
       devOptions: {
