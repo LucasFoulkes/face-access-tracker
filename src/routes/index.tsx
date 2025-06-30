@@ -1,3 +1,4 @@
+// working alpha version with iPhone support and model loading diagnostics
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import * as faceapi from 'face-api.js';
 import { useRef, useEffect, useState } from 'react';
