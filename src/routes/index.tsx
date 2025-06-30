@@ -222,20 +222,41 @@ function App() {
     useEffect(() => {
         if (!modelsLoaded || result || showNewFaceDialog) return;
 
-        let isDetecting = false; // Prevent overlapping detections
+        addDebug('Auto detection useEffect triggered');
+        let isDetecting = false;
+        let detectionAttempts = 0;
         const isIPhone = /iPhone/i.test(navigator.userAgent);
 
         const detect = async () => {
             const video = videoRef.current;
-            if (!video?.videoWidth || !video?.videoHeight || isDetecting) {
+
+            // More detailed logging
+            if (!video) {
+                addDebug('No video element found');
+                setTimeout(() => requestAnimationFrame(detect), 500);
+                return;
+            }
+
+            if (!video.videoWidth || !video.videoHeight) {
+                addDebug(`Video not ready: ${video.videoWidth}x${video.videoHeight}`);
+                setTimeout(() => requestAnimationFrame(detect), 500);
+                return;
+            }
+
+            if (isDetecting) {
                 setTimeout(() => requestAnimationFrame(detect), isIPhone ? 300 : 100);
                 return;
             }
 
-            isDetecting = true; // Set detection in progress
+            isDetecting = true;
+            detectionAttempts++;
+
+            // Log every 10 attempts instead of being completely silent
+            if (detectionAttempts === 1 || detectionAttempts % 10 === 0) {
+                addDebug(`Auto detection attempt #${detectionAttempts}`);
+            }
 
             try {
-                // Use same detection settings that work in manual mode
                 const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
                     inputSize: 320,
                     scoreThreshold: 0.1
@@ -244,37 +265,45 @@ function App() {
                     .withFaceDescriptor();
 
                 if (face) {
-                    addDebug(`Face detected! Score: ${face.detection.score.toFixed(3)}`);
+                    addDebug(`AUTO: Face detected! Score: ${face.detection.score.toFixed(3)}`);
 
                     const worker = await findWorkerByFace(face.descriptor);
                     if (worker) {
-                        addDebug(`Worker found: ${worker.nombres}`);
+                        addDebug(`AUTO: Worker found: ${worker.nombres}`);
                         setRecognizedWorker(worker);
                         setResult(`${worker.nombres} ${worker.apellidos}`);
                         setCountdown(3);
-                        // Detection stops here - result is set, useEffect dependency will prevent restart
-                        return;
+                        return; // Stop detection
                     } else {
-                        addDebug('Face not in database - showing dialog');
+                        addDebug('AUTO: Face not in database - showing dialog');
                         setCurrentFace(face.descriptor);
                         setShowNewFaceDialog(true);
-                        // Detection stops here - dialog is shown, useEffect dependency will prevent restart
-                        return;
+                        return; // Stop detection
+                    }
+                } else {
+                    // Only log no face every 50 attempts to reduce spam
+                    if (detectionAttempts % 50 === 0) {
+                        addDebug(`AUTO: No face detected (attempt ${detectionAttempts})`);
                     }
                 }
             } catch (error) {
-                addDebug(`Detection error: ${error instanceof Error ? error.message : 'Unknown'}`);
+                addDebug(`AUTO ERROR: ${error instanceof Error ? error.message : 'Unknown'}`);
             }
 
-            isDetecting = false; // Reset detection flag
+            isDetecting = false;
 
             // Continue detection loop
             const delay = isIPhone ? 300 : 100;
             setTimeout(() => requestAnimationFrame(detect), delay);
         };
 
-        addDebug('Starting face detection loop');
+        addDebug('Starting auto detection loop');
         detect();
+
+        // Cleanup function
+        return () => {
+            addDebug('Auto detection cleanup');
+        };
     }, [modelsLoaded, result, showNewFaceDialog]);
 
     useEffect(() => {
@@ -452,9 +481,51 @@ function App() {
             {!result && !showNewFaceDialog && (
                 <div className="absolute top-2 left-2 right-2 bg-black/70 text-white text-xs p-2 rounded max-h-40 overflow-y-auto z-10">
                     <div className="font-bold mb-1">Debug Info ({deviceInfo}):</div>
-                    {debugInfo.slice(-6).map((info, i) => (
+                    {debugInfo.slice(-8).map((info, i) => (
                         <div key={i}>{info}</div>
                     ))}
+
+                    {/* Temporary debug button for comparison */}
+                    <button
+                        className="mt-2 bg-red-600 text-white px-2 py-1 rounded text-xs"
+                        onClick={async () => {
+                            const video = videoRef.current;
+                            if (video) {
+                                addDebug('MANUAL: Starting manual detection...');
+                                try {
+                                    const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
+                                        inputSize: 320,
+                                        scoreThreshold: 0.1
+                                    }))
+                                        .withFaceLandmarks()
+                                        .withFaceDescriptor();
+
+                                    if (face) {
+                                        addDebug(`MANUAL: Face found! Score: ${face.detection.score.toFixed(3)}`);
+                                        const worker = await findWorkerByFace(face.descriptor);
+                                        if (worker) {
+                                            addDebug(`MANUAL: Worker found: ${worker.nombres}`);
+                                            setRecognizedWorker(worker);
+                                            setResult(`${worker.nombres} ${worker.apellidos}`);
+                                            setCountdown(3);
+                                        } else {
+                                            addDebug('MANUAL: Face not in database - showing dialog');
+                                            setCurrentFace(face.descriptor);
+                                            setShowNewFaceDialog(true);
+                                        }
+                                    } else {
+                                        addDebug('MANUAL: No face detected');
+                                    }
+                                } catch (err) {
+                                    addDebug(`MANUAL ERROR: ${err instanceof Error ? err.message : 'Unknown'}`);
+                                }
+                            } else {
+                                addDebug('MANUAL: No video element');
+                            }
+                        }}
+                    >
+                        Manual Test
+                    </button>
                 </div>
             )}
 
