@@ -152,6 +152,7 @@ function App() {
     const [currentFace, setCurrentFace] = useState<Float32Array | null>(null);
     const [recognizedWorker, setRecognizedWorker] = useState<WorkerProfile | null>(null);
     const [countdown, setCountdown] = useState<number | null>(null);
+    const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
     // Add debug state for mobile debugging
     const [debugInfo, setDebugInfo] = useState<string[]>([]);
@@ -159,6 +160,27 @@ function App() {
     const addDebug = (message: string) => {
         setDebugInfo(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${message}`]);
     };
+
+    // Monitor online/offline status
+    useEffect(() => {
+        const handleOnline = () => {
+            setIsOffline(false);
+            addDebug('Back online');
+        };
+
+        const handleOffline = () => {
+            setIsOffline(true);
+            addDebug('Gone offline');
+        };
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
 
     // Detect device type for iPhone-specific handling
     useEffect(() => {
@@ -214,6 +236,12 @@ function App() {
         let stream: MediaStream;
         addDebug('Setting up camera...');
 
+        // Check if we're offline and camera was previously granted
+        const isOffline = !navigator.onLine;
+        if (isOffline) {
+            addDebug('Offline mode detected - attempting camera access...');
+        }
+
         // iPhone-specific camera constraints
         const isIPhone = /iPhone/i.test(navigator.userAgent);
         const constraints = {
@@ -228,10 +256,24 @@ function App() {
 
         addDebug(`Camera constraints: ${JSON.stringify(constraints.video)}`);
 
-        navigator.mediaDevices.getUserMedia(constraints)
-            .then(mediaStream => {
+        // Enhanced camera access with offline support
+        const requestCamera = async () => {
+            try {
+                // Check if camera permission is already granted
+                if ('permissions' in navigator) {
+                    const permission = await navigator.permissions.query({ name: 'camera' as PermissionName });
+                    addDebug(`Camera permission status: ${permission.state}`);
+
+                    if (permission.state === 'denied') {
+                        addDebug('Camera access denied by user');
+                        return;
+                    }
+                }
+
+                const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
                 stream = mediaStream;
                 const video = videoRef.current;
+
                 if (video) {
                     video.srcObject = stream;
                     video.onloadedmetadata = () => {
@@ -246,8 +288,22 @@ function App() {
                     };
                     video.onerror = (err) => addDebug(`Video error: ${err}`);
                 }
-            })
-            .catch(err => addDebug(`Camera error: ${err.message}`));
+            } catch (err) {
+                const error = err as Error;
+                addDebug(`Camera error: ${error.message}`);
+
+                if (isOffline && error.name === 'NotAllowedError') {
+                    addDebug('Camera blocked in offline mode - this is normal browser behavior');
+                    addDebug('Camera access must be granted while online first');
+                } else if (error.name === 'NotFoundError') {
+                    addDebug('No camera device found');
+                } else if (error.name === 'NotAllowedError') {
+                    addDebug('Camera access denied - check browser permissions');
+                }
+            }
+        };
+
+        requestCamera();
 
         return () => {
             setVideoReady(false); // Reset video ready state
@@ -466,12 +522,26 @@ function App() {
                             <div className="space-x-2">
                                 <button
                                     className="bg-blue-600 text-white px-4 py-2 rounded text-sm"
+                                    style={{
+                                        backgroundColor: '#2563eb',
+                                        color: '#ffffff',
+                                        transform: 'translateZ(0)',
+                                        backfaceVisibility: 'hidden',
+                                        border: 'none'
+                                    }}
                                     onClick={() => window.location.reload()}
                                 >
                                     Retry Loading
                                 </button>
                                 <button
                                     className="bg-gray-600 text-white px-4 py-2 rounded text-sm"
+                                    style={{
+                                        backgroundColor: '#4b5563',
+                                        color: '#ffffff',
+                                        transform: 'translateZ(0)',
+                                        backfaceVisibility: 'hidden',
+                                        border: 'none'
+                                    }}
                                     onClick={() => {
                                         // Test basic fetch to see if it's a network issue
                                         fetch('/models/tiny_face_detector_model-weights_manifest.json')
@@ -507,9 +577,72 @@ function App() {
                 style={{ display: 'block', transform: 'scaleX(-1)' }}
             />
 
+            {/* Offline indicator */}
+            {isOffline && (
+                <div
+                    className="absolute top-4 left-4 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-medium z-20"
+                    style={{
+                        backgroundColor: '#dc2626',
+                        transform: 'translateZ(0)',
+                        backfaceVisibility: 'hidden'
+                    }}
+                >
+                    Sin conexión
+                </div>
+            )}
+
+            {/* Camera access warning for offline mode */}
+            {isOffline && !videoReady && modelsLoaded && (
+                <div
+                    className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center text-white text-center p-4 z-10"
+                    style={{
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        transform: 'translateZ(0)',
+                        backfaceVisibility: 'hidden'
+                    }}
+                >
+                    <div
+                        className="bg-yellow-600 p-4 rounded-lg max-w-md"
+                        style={{
+                            backgroundColor: '#ca8a04',
+                            transform: 'translateZ(0)',
+                            backfaceVisibility: 'hidden'
+                        }}
+                    >
+                        <h3 className="text-lg font-semibold mb-2">Modo Sin Conexión</h3>
+                        <p className="text-sm mb-3">
+                            La cámara puede no funcionar sin conexión a internet.
+                            Para usar el reconocimiento facial sin conexión:
+                        </p>
+                        <ol className="text-xs text-left space-y-1 mb-3">
+                            <li>1. Conéctate a internet</li>
+                            <li>2. Permite el acceso a la cámara</li>
+                            <li>3. Luego podrás usar la app sin conexión</li>
+                        </ol>
+                        <button
+                            className="bg-white text-yellow-600 px-4 py-2 rounded text-sm font-medium"
+                            style={{
+                                backgroundColor: '#ffffff',
+                                color: '#ca8a04',
+                                transform: 'translateZ(0)',
+                                backfaceVisibility: 'hidden'
+                            }}
+                            onClick={() => window.location.reload()}
+                        >
+                            Reintentar
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {result && (
                 <div
                     className="absolute inset-0 bg-blue-500/90 flex flex-col items-center justify-center text-white cursor-pointer p-4"
+                    style={{
+                        backgroundColor: 'rgba(59, 130, 246, 0.9)',
+                        transform: 'translateZ(0)',
+                        backfaceVisibility: 'hidden'
+                    }}
                     onClick={handleWelcomeClick}
                 >
                     <h2 className="text-4xl capitalize w-full text-center justify-center">
@@ -522,6 +655,13 @@ function App() {
                     )}
                     <Button
                         className="text-white h-16 w-full m-4 text-xl absolute bottom-0 left-0 right-0 m-0 rounded-none"
+                        style={{
+                            backgroundColor: 'rgba(59, 130, 246, 1)',
+                            color: '#ffffff',
+                            transform: 'translateZ(0)',
+                            backfaceVisibility: 'hidden',
+                            border: 'none'
+                        }}
                         onClick={(e) => {
                             e.stopPropagation();
                             setCountdown(null);
