@@ -118,6 +118,7 @@ function App() {
     const navigate = useNavigate()
     const videoRef = useRef<HTMLVideoElement>(null);
     const [modelsLoaded, setModelsLoaded] = useState(false);
+    const [videoReady, setVideoReady] = useState(false); // Add video ready state
     const [result, setResult] = useState('');
     const [showDialog, setShowDialog] = useState(false);
     const [showNewFaceDialog, setShowNewFaceDialog] = useState(false);
@@ -208,7 +209,10 @@ function App() {
                         addDebug(`Video ready: ${video.videoWidth}x${video.videoHeight}`);
                         // iPhone requires explicit play() call
                         video.play()
-                            .then(() => addDebug('Video playing successfully'))
+                            .then(() => {
+                                addDebug('Video playing successfully');
+                                setVideoReady(true); // Set video ready after it starts playing
+                            })
                             .catch(err => addDebug(`Play error: ${err.message}`));
                     };
                     video.onerror = (err) => addDebug(`Video error: ${err}`);
@@ -216,13 +220,16 @@ function App() {
             })
             .catch(err => addDebug(`Camera error: ${err.message}`));
 
-        return () => stream?.getTracks().forEach(track => track.stop());
+        return () => {
+            setVideoReady(false); // Reset video ready state
+            stream?.getTracks().forEach(track => track.stop());
+        };
     }, [modelsLoaded]);
 
     useEffect(() => {
-        if (!modelsLoaded || result || showNewFaceDialog) return;
+        if (!modelsLoaded || !videoReady || result || showNewFaceDialog) return;
 
-        addDebug('Auto detection useEffect triggered');
+        addDebug('Auto detection starting - models and video ready');
         let isDetecting = false;
         let detectionAttempts = 0;
         const isIPhone = /iPhone/i.test(navigator.userAgent);
@@ -230,15 +237,9 @@ function App() {
         const detect = async () => {
             const video = videoRef.current;
 
-            // More detailed logging
-            if (!video) {
-                addDebug('No video element found');
-                setTimeout(() => requestAnimationFrame(detect), 500);
-                return;
-            }
-
-            if (!video.videoWidth || !video.videoHeight) {
-                addDebug(`Video not ready: ${video.videoWidth}x${video.videoHeight}`);
+            // Video should be ready now, but double check
+            if (!video || !video.videoWidth || !video.videoHeight) {
+                addDebug(`Video check failed: ${video ? `${video.videoWidth}x${video.videoHeight}` : 'no video'}`);
                 setTimeout(() => requestAnimationFrame(detect), 500);
                 return;
             }
@@ -304,7 +305,7 @@ function App() {
         return () => {
             addDebug('Auto detection cleanup');
         };
-    }, [modelsLoaded, result, showNewFaceDialog]);
+    }, [modelsLoaded, videoReady, result, showNewFaceDialog]);
 
     useEffect(() => {
         if (!countdown || countdown <= 0) return;
