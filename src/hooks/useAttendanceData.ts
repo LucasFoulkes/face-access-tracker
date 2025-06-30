@@ -169,7 +169,9 @@ export const useAttendanceData = (dateRange?: DateRange, refreshKey: number = 0)
     }, [dateRange, refreshKey])
 
     const formatDate = (dateString: string) => {
-        const date = new Date(dateString)
+        // Parse the date string manually to avoid timezone issues
+        const [year, month, day] = dateString.split('-').map(Number)
+        const date = new Date(year, month - 1, day) // month is 0-indexed in Date constructor
         const days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
         return `${days[date.getDay()]} ${date.getDate()}/${date.getMonth() + 1}`
     }

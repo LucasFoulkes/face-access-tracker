@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
-import { CalendarIcon, Search, RefreshCw } from 'lucide-react'
+import { CalendarIcon, Search, RefreshCw, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 interface DateRange {
     from: Date
@@ -40,6 +41,67 @@ function Reportes() {
     useEffect(() => {
         handleUpdateData()
     }, []) // Empty dependency array means it runs only once on mount
+
+    // Function to export filtered data to Excel
+    const exportToExcel = () => {
+        if (!filteredAttendanceData.length || !weekDays.length) return;
+
+        // Prepare data for Excel export
+        const excelData = [];
+
+        // Add header row
+        const headerRow = ['Trabajador', ...weekDays.map(day => formatDate(day))];
+        excelData.push(headerRow);
+
+        // Add data rows
+        filteredAttendanceData.forEach(worker => {
+            const row = [worker.workerName];
+            weekDays.forEach(day => {
+                const dayData = worker.dailyData[day];
+                if (dayData) {
+                    // Combine all attendance info in one cell
+                    const cellValue = `${dayData.firstDetection} - ${dayData.lastDetection} (${dayData.totalTime})`;
+                    row.push(cellValue);
+                } else {
+                    row.push('—');
+                }
+            });
+            excelData.push(row);
+        });
+
+        // Create workbook and worksheet
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.aoa_to_sheet(excelData);
+
+        // Set column widths
+        const colWidths = [
+            { wch: 25 }, // Worker name column
+            ...weekDays.map(() => ({ wch: 20 })) // Date columns
+        ];
+        worksheet['!cols'] = colWidths;
+
+        // Add worksheet to workbook
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Reporte de Asistencia');
+
+        // Generate filename with current date and filter info
+        const currentDate = new Date().toISOString().split('T')[0];
+        let filename = `reporte-asistencia-${currentDate}`;
+
+        if (range?.from && range?.to) {
+            const fromDate = range.from.toISOString().split('T')[0];
+            const toDate = range.to.toISOString().split('T')[0];
+            filename += `-${fromDate}-${toDate}`;
+        }
+
+        if (workerFilter.trim()) {
+            filename += `-filtrado`;
+        }
+
+        filename += '.xlsx';
+
+        // Save file
+        XLSX.writeFile(workbook, filename);
+    };
 
     // Filter workers based on search text
     const filteredAttendanceData = useMemo(() => {
@@ -82,18 +144,31 @@ function Reportes() {
 
     return (
         <div className='h-full flex flex-col overflow-hidden'>
-            {/* Actualizar button positioned fixed to viewport top right */}
-            <Button
-                variant="outline"
-                size="sm"
-                onClick={handleUpdateData}
-                disabled={isUpdating}
-                className="fixed top-2 right-2 z-50 flex items-center gap-1 text-xs px-2 py-1 sm:top-4 sm:right-4 sm:gap-2 sm:text-sm sm:px-3 sm:py-2"
-            >
-                <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 ${isUpdating ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">{isUpdating ? 'Actualizando...' : 'Actualizar'}</span>
-                <span className="sm:hidden">{isUpdating ? '...' : '↻'}</span>
-            </Button>
+            {/* Header with Actualizar and Download buttons positioned fixed to viewport top right */}
+            <div className="fixed top-2 right-2 z-50 flex gap-2 sm:top-4 sm:right-4">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportToExcel}
+                    disabled={!filteredAttendanceData.length || !weekDays.length}
+                    className="flex items-center gap-1 text-xs px-2 py-1 sm:gap-2 sm:text-sm sm:px-3 sm:py-2"
+                >
+                    <Download className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden sm:inline">Excel</span>
+                    <span className="sm:hidden">📊</span>
+                </Button>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleUpdateData}
+                    disabled={isUpdating}
+                    className="flex items-center gap-1 text-xs px-2 py-1 sm:gap-2 sm:text-sm sm:px-3 sm:py-2"
+                >
+                    <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 ${isUpdating ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline">{isUpdating ? 'Actualizando...' : 'Actualizar'}</span>
+                    <span className="sm:hidden">{isUpdating ? '...' : '↻'}</span>
+                </Button>
+            </div>
 
             <div className="flex flex-col gap-4 p-4 border-b border-zinc-200 sm:flex-row sm:justify-between sm:items-center">
                 <h2 className="text-lg font-semibold">Reporte de Asistencia</h2>
@@ -158,37 +233,37 @@ function Reportes() {
                         <table className='w-full border-collapse min-w-max'>
                             <thead className='bg-zinc-100 sticky top-0 z-10'>
                                 <tr>
-                                    <th className="px-2 py-2 text-left capitalize font-medium min-w-24 sm:px-4">
-                                        Fecha
+                                    <th className="px-2 py-2 text-left capitalize font-medium min-w-32 sm:px-4">
+                                        Trabajador
                                     </th>
-                                    {filteredAttendanceData.length > 0 ? (
-                                        filteredAttendanceData.map(worker => (
-                                            <th key={worker.workerId} className="px-2 py-2 text-center capitalize font-medium min-w-32 sm:px-4">
-                                                <div className="truncate max-w-24 sm:max-w-none" title={worker.workerName}>
-                                                    {worker.workerName}
+                                    {weekDays.length > 0 ? (
+                                        weekDays.map(day => (
+                                            <th key={day} className="px-2 py-2 text-center capitalize font-medium min-w-24 sm:px-4">
+                                                <div className="truncate max-w-20 sm:max-w-none text-xs sm:text-sm" title={formatDate(day)}>
+                                                    {formatDate(day)}
                                                 </div>
                                             </th>
                                         ))
                                     ) : (
                                         <th className="px-2 py-2 text-center capitalize font-medium text-gray-400 sm:px-4">
-                                            {workerFilter ? 'Sin coincidencias' : 'Sin asistencias'}
+                                            Sin fechas
                                         </th>
                                     )}
                                 </tr>
                             </thead>
                             <tbody>
-                                {weekDays.map((day) => (
-                                    <tr key={day}>
-                                        <td className='border-b border-gray-200 px-2 py-2 text-left font-medium min-w-24 sm:px-4'>
-                                            <div className="text-xs sm:text-sm">
-                                                {formatDate(day)}
-                                            </div>
-                                        </td>
-                                        {filteredAttendanceData.length > 0 ? (
-                                            filteredAttendanceData.map(worker => {
+                                {filteredAttendanceData.length > 0 ? (
+                                    filteredAttendanceData.map((worker) => (
+                                        <tr key={worker.workerId}>
+                                            <td className='border-b border-gray-200 px-2 py-2 text-left font-medium min-w-32 sm:px-4'>
+                                                <div className="text-xs sm:text-sm truncate" title={worker.workerName}>
+                                                    {worker.workerName}
+                                                </div>
+                                            </td>
+                                            {weekDays.map(day => {
                                                 const dayData = worker.dailyData[day]
                                                 return (
-                                                    <td key={worker.workerId} className={`border-b border-gray-200 px-2 py-2 text-center min-w-32 sm:px-4 ${dayData?.isSingleDetection ? 'bg-red-200' : ''}`}>
+                                                    <td key={day} className={`border-b border-gray-200 px-2 py-2 text-center min-w-24 sm:px-4 ${dayData?.isSingleDetection ? 'bg-red-200' : ''}`}>
                                                         {dayData ? (
                                                             <div className="text-xs sm:text-sm">
                                                                 <div className="text-green-700 font-medium">
@@ -208,16 +283,23 @@ function Reportes() {
                                                         )}
                                                     </td>
                                                 )
-                                            })
-                                        ) : (
-                                            <td className='border-b border-gray-200 px-2 py-2 text-center sm:px-4'>
+                                            })}
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td className='border-b border-gray-200 px-2 py-2 text-left font-medium text-gray-400 sm:px-4'>
+                                            {workerFilter ? 'Sin coincidencias' : 'Sin trabajadores'}
+                                        </td>
+                                        {weekDays.map(day => (
+                                            <td key={day} className='border-b border-gray-200 px-2 py-2 text-center sm:px-4'>
                                                 <div className="text-gray-400 text-xs sm:text-sm">
                                                     —
                                                 </div>
                                             </td>
-                                        )}
+                                        ))}
                                     </tr>
-                                ))}
+                                )}
                             </tbody>
                         </table>
                     </div>
