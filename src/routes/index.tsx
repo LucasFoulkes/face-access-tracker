@@ -35,13 +35,29 @@ function App() {
     const [recognizedWorker, setRecognizedWorker] = useState<WorkerProfile | null>(null);
     const [countdown, setCountdown] = useState<number | null>(null);
 
+    // Add debug state for mobile debugging
+    const [debugInfo, setDebugInfo] = useState<string[]>([]);
+    const addDebug = (message: string) => {
+        setDebugInfo(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${message}`]);
+    };
+
     useEffect(() => {
         const initialize = async () => {
-            await initDatabase();
-            await loadModels();
-            await syncToSupabase();
-            await syncFromSupabase();
-            setModelsLoaded(true);
+            addDebug('Starting initialization...');
+            try {
+                await initDatabase();
+                addDebug('Database initialized');
+                await loadModels();
+                addDebug('Models loaded');
+                await syncToSupabase();
+                addDebug('Synced to Supabase');
+                await syncFromSupabase();
+                addDebug('Synced from Supabase');
+                setModelsLoaded(true);
+                addDebug('Ready for face detection');
+            } catch (error) {
+                addDebug(`Init error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
         };
         initialize();
     }, []);
@@ -50,16 +66,28 @@ function App() {
         if (!modelsLoaded) return;
 
         let stream: MediaStream;
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+        addDebug('Setting up camera...');
+
+        navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: 'user',
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            },
+            audio: false
+        })
             .then(mediaStream => {
                 stream = mediaStream;
                 const video = videoRef.current;
                 if (video) {
                     video.srcObject = stream;
-                    video.onloadedmetadata = () => video.play().catch(console.error);
+                    video.onloadedmetadata = () => {
+                        addDebug(`Video ready: ${video.videoWidth}x${video.videoHeight}`);
+                        video.play().catch(err => addDebug(`Play error: ${err.message}`));
+                    };
                 }
             })
-            .catch(err => alert(`Error de cámara: ${err.message}`));
+            .catch(err => addDebug(`Camera error: ${err.message}`));
 
         return () => stream?.getTracks().forEach(track => track.stop());
     }, [modelsLoaded]);
@@ -67,23 +95,44 @@ function App() {
     useEffect(() => {
         if (!modelsLoaded || result || showNewFaceDialog) return;
 
+        let detectionCount = 0;
+        let lastFaceTime = 0;
+
         const detect = async () => {
             const video = videoRef.current;
             if (!video?.videoWidth) return requestAnimationFrame(detect);
 
+            detectionCount++;
+            if (detectionCount === 1) {
+                addDebug('Starting face detection loop');
+            }
+            if (detectionCount % 50 === 0) { // Show every 50th detection
+                addDebug(`Detection attempt #${detectionCount}`);
+            }
+
             try {
-                const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
-                    .withFaceLandmarks().withFaceDescriptor();
+                const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
+                    inputSize: 416,
+                    scoreThreshold: 0.3
+                })).withFaceLandmarks().withFaceDescriptor();
 
                 if (face) {
+                    const now = Date.now();
+                    if (now - lastFaceTime > 2000) { // Don't spam face detection messages
+                        addDebug(`Face detected! Score: ${face.detection.score.toFixed(2)}`);
+                        lastFaceTime = now;
+                    }
+
                     const worker = await findWorkerByFace(face.descriptor);
                     if (worker) {
+                        addDebug(`Worker found: ${worker.nombres}`);
                         setRecognizedWorker(worker);
                         setResult(`${worker.nombres} ${worker.apellidos}`);
                         setCountdown(3);
                         // Detection stops here - result is set
                         return;
                     } else {
+                        addDebug('Face not in database - showing dialog');
                         // Face not recognized - show dialog and stop detection
                         setCurrentFace(face.descriptor);
                         setShowNewFaceDialog(true);
@@ -91,8 +140,10 @@ function App() {
                         return;
                     }
                 }
-            } catch {
-                // Continue detection loop on error
+            } catch (error) {
+                if (detectionCount % 100 === 0) { // Only show errors occasionally
+                    addDebug(`Detection error: ${error instanceof Error ? error.message : 'Unknown'}`);
+                }
             }
             requestAnimationFrame(detect);
         };
@@ -206,7 +257,18 @@ function App() {
     };
 
     if (!modelsLoaded) {
-        return <div className="flex h-screen items-center justify-center bg-black text-white text-3xl">Loading...</div>;
+        return (
+            <div className="flex h-screen items-center justify-center bg-black text-white text-center p-4">
+                <div>
+                    <div className="text-3xl mb-4">Loading...</div>
+                    <div className="text-sm space-y-1">
+                        {debugInfo.map((info, i) => (
+                            <div key={i}>{info}</div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -221,6 +283,17 @@ function App() {
                 className="max-w-full max-h-full object-cover"
                 style={{ display: 'block', transform: 'scaleX(-1)' }}
             />
+
+            {/* Debug overlay - only show when no result */}
+            {!result && !showNewFaceDialog && (
+                <div className="absolute top-2 left-2 right-2 bg-black/70 text-white text-xs p-2 rounded max-h-32 overflow-y-auto z-10">
+                    <div className="font-bold mb-1">Debug Info:</div>
+                    {debugInfo.slice(-5).map((info, i) => (
+                        <div key={i}>{info}</div>
+                    ))}
+                </div>
+            )}
+
             {result && (
                 <div
                     className="absolute inset-0 bg-blue-500/90 flex flex-col items-center justify-center text-white cursor-pointer p-4"
