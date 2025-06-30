@@ -94,17 +94,11 @@ function Reportes() {
                 { wch: 12 }  // Horas
             ])
         ];
-        worksheet['!cols'] = colWidths;
-
-        // Create merged cells for date headers
-        const merges = [];
-        weekDays.forEach((day, dayIndex) => {
+        worksheet['!cols'] = colWidths;        // Create merged cells for date headers
+        const merges: XLSX.Range[] = [];
+        weekDays.forEach((_, dayIndex) => {
             const startCol = 1 + (dayIndex * 3); // Start after worker name column
             const endCol = startCol + 2; // Span 3 columns
-
-            // Convert column numbers to Excel column letters
-            const startColLetter = XLSX.utils.encode_col(startCol);
-            const endColLetter = XLSX.utils.encode_col(endCol);
 
             merges.push({
                 s: { r: 0, c: startCol }, // Start: row 0, calculated column
