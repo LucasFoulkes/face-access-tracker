@@ -7,6 +7,32 @@ import { WorkerProfile } from '../types';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 
+// Force cache refresh for PWA updates
+const forceCacheRefresh = async () => {
+    if ('serviceWorker' in navigator && 'caches' in window) {
+        try {
+            const registration = await navigator.serviceWorker.getRegistration();
+            if (registration) {
+                await registration.update();
+                console.log('Service worker updated');
+            }
+
+            // Clear old caches
+            const cacheNames = await caches.keys();
+            const oldCaches = cacheNames.filter(name =>
+                name.includes('workbox-precache') && !name.includes(new Date().toDateString())
+            );
+
+            for (const cacheName of oldCaches) {
+                await caches.delete(cacheName);
+                console.log('Deleted old cache:', cacheName);
+            }
+        } catch (error) {
+            console.log('Cache refresh failed:', error);
+        }
+    }
+};
+
 const loadModels = async () => {
     try {
         const isIPhone = /iPhone/i.test(navigator.userAgent);
@@ -146,6 +172,10 @@ function App() {
     useEffect(() => {
         const initialize = async () => {
             addDebug('Starting initialization...');
+
+            // Force cache refresh on app start to ensure latest version
+            await forceCacheRefresh();
+
             try {
                 await initDatabase();
                 addDebug('Database initialized');

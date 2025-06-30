@@ -26,3 +26,29 @@ if (!rootElement.innerHTML) {
     </StrictMode>,
   )
 }
+
+// Enhanced service worker handling for better cache updates
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    // Clear all caches on app start to ensure fresh content
+    caches.keys().then(cacheNames => {
+      const oldCaches = cacheNames.filter(name =>
+        name.includes('workbox-precache') ||
+        name.includes('static-resources') ||
+        name.includes('face-access-tracker')
+      );
+
+      if (oldCaches.length > 1) {
+        // Keep only the most recent cache, delete others
+        const sortedCaches = oldCaches.sort().reverse();
+        const cachesToDelete = sortedCaches.slice(1);
+
+        Promise.all(
+          cachesToDelete.map(cacheName => caches.delete(cacheName))
+        ).then(() => {
+          console.log('Cleaned up old caches:', cachesToDelete);
+        });
+      }
+    });
+  });
+}
