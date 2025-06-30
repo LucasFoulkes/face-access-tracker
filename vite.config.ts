@@ -31,9 +31,10 @@ export default defineConfig({
       },
 
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,ico}', 'models/**'],
         cleanupOutdatedCaches: true,
         clientsClaim: true,
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB to handle large model files
       },
 
       devOptions: {
@@ -49,4 +50,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    fs: {
+      // Allow serving files from the models directory
+      allow: ['..', 'public/models']
+    }
+  }
 })

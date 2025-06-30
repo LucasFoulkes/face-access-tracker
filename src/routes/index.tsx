@@ -6,11 +6,101 @@ import { WorkerProfile } from '../types';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 
-const loadModels = () => Promise.all([
-    faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
-    faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
-    faceapi.nets.faceRecognitionNet.loadFromUri('/models')
-]);
+const loadModels = async () => {
+    try {
+        const isIPhone = /iPhone/i.test(navigator.userAgent);
+        const modelPath = '/models';
+
+        // Test if models directory is accessible with detailed diagnostics
+        const modelFiles = [
+            'tiny_face_detector_model-weights_manifest.json',
+            'tiny_face_detector_model-shard1',
+            'face_landmark_68_model-weights_manifest.json',
+            'face_landmark_68_model-shard1',
+            'face_recognition_model-weights_manifest.json',
+            'face_recognition_model-shard1',
+            'face_recognition_model-shard2'
+        ];
+
+        console.log('Testing model file accessibility...');
+        const accessResults = [];
+
+        for (const file of modelFiles) {
+            try {
+                const url = `${modelPath}/${file}`;
+                console.log(`Testing: ${url}`);
+                const testResponse = await fetch(url, {
+                    method: 'HEAD', // Use HEAD to avoid downloading large files
+                    cache: 'no-cache'
+                });
+
+                const result = `${file}: ${testResponse.status} ${testResponse.statusText} (${testResponse.headers.get('content-type') || 'no content-type'})`;
+                console.log(result);
+                accessResults.push(result);
+
+                if (!testResponse.ok) {
+                    throw new Error(`File ${file} returned ${testResponse.status}: ${testResponse.statusText}`);
+                }
+            } catch (fetchError) {
+                const errorMsg = `${file}: FAILED - ${fetchError instanceof Error ? fetchError.message : 'Unknown error'}`;
+                console.error(errorMsg);
+                accessResults.push(errorMsg);
+                throw new Error(`Model file check failed for ${file}: ${fetchError instanceof Error ? fetchError.message : 'Unknown'}`);
+            }
+        }
+
+        console.log('All model files are accessible:', accessResults);
+        console.log('Current URL:', window.location.href);
+        console.log('Base URL for models:', window.location.origin + modelPath);
+
+        // iPhone-specific model loading with retries and smaller timeouts
+        const loadWithRetry = async (loadFunction: () => Promise<any>, modelName: string, retries = 3) => {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    console.log(`Loading ${modelName}, attempt ${i + 1}/${retries}`);
+                    await loadFunction();
+                    console.log(`${modelName} loaded successfully`);
+                    return;
+                } catch (error) {
+                    const errorMsg = `${modelName} loading attempt ${i + 1} failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+                    console.error(errorMsg);
+
+                    // Log specific error details for debugging
+                    if (error instanceof Error) {
+                        console.error(`Error name: ${error.name}`);
+                        console.error(`Error stack: ${error.stack}`);
+                    }
+
+                    if (i === retries - 1) {
+                        throw new Error(`${modelName} failed after ${retries} attempts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Progressive delay
+                }
+            }
+        };
+
+        if (isIPhone) {
+            // Load models sequentially on iPhone to avoid overwhelming
+            console.log('Loading models sequentially for iPhone...');
+            await loadWithRetry(() => faceapi.nets.tinyFaceDetector.loadFromUri(modelPath), 'TinyFaceDetector');
+            await loadWithRetry(() => faceapi.nets.faceLandmark68Net.loadFromUri(modelPath), 'FaceLandmark68Net');
+            await loadWithRetry(() => faceapi.nets.faceRecognitionNet.loadFromUri(modelPath), 'FaceRecognitionNet');
+        } else {
+            // Load models in parallel for other devices
+            await Promise.all([
+                faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
+                faceapi.nets.faceLandmark68Net.loadFromUri(modelPath),
+                faceapi.nets.faceRecognitionNet.loadFromUri(modelPath)
+            ]);
+        }
+
+        console.log('All models loaded successfully');
+        return true;
+    } catch (error) {
+        console.error('Model loading failed:', error);
+        throw new Error(`Model loading failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+};
 
 const findWorkerByFace = async (faceDescriptor: Float32Array): Promise<WorkerProfile | null> => {
     const faceDescriptors = await db.face_descriptors.toArray();
@@ -59,16 +149,30 @@ function App() {
             try {
                 await initDatabase();
                 addDebug('Database initialized');
+
+                addDebug('Loading face detection models...');
                 await loadModels();
-                addDebug('Models loaded');
+                addDebug('Models loaded successfully');
+
+                addDebug('Syncing to Supabase...');
                 await syncToSupabase();
                 addDebug('Synced to Supabase');
+
+                addDebug('Syncing from Supabase...');
                 await syncFromSupabase();
                 addDebug('Synced from Supabase');
+
                 setModelsLoaded(true);
                 addDebug('Ready for face detection');
             } catch (error) {
-                addDebug(`Init error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                addDebug(`Init error: ${errorMessage}`);
+
+                // For iPhone model loading issues, provide specific guidance
+                if (/iPhone/i.test(navigator.userAgent) && errorMessage.includes('Model loading failed')) {
+                    addDebug('iPhone model loading issue detected');
+                    addDebug('Try refreshing the page or check internet connection');
+                }
             }
         };
         initialize();
@@ -301,11 +405,51 @@ function App() {
             <div className="flex h-screen items-center justify-center bg-black text-white text-center p-4">
                 <div>
                     <div className="text-3xl mb-4">Loading...</div>
-                    <div className="text-sm space-y-1">
+                    <div className="text-sm space-y-1 mb-4">
                         {debugInfo.map((info, i) => (
                             <div key={i}>{info}</div>
                         ))}
                     </div>
+
+                    {/* Show retry button if model loading failed on iPhone */}
+                    {debugInfo.some(info => info.includes('Init error')) && /iPhone/i.test(navigator.userAgent) && (
+                        <div className="space-y-2">
+                            <div className="text-red-400 text-sm font-semibold">iPhone Model Loading Failed</div>
+                            <div className="text-xs text-gray-300 text-left space-y-1">
+                                <div>Common iPhone issues:</div>
+                                <div>• Poor internet connection</div>
+                                <div>• Safari restrictions on large files</div>
+                                <div>• Server not serving model files correctly</div>
+                                <div>• CORS or file permission issues</div>
+                            </div>
+                            <div className="space-x-2">
+                                <button
+                                    className="bg-blue-600 text-white px-4 py-2 rounded text-sm"
+                                    onClick={() => window.location.reload()}
+                                >
+                                    Retry Loading
+                                </button>
+                                <button
+                                    className="bg-gray-600 text-white px-4 py-2 rounded text-sm"
+                                    onClick={() => {
+                                        // Test basic fetch to see if it's a network issue
+                                        fetch('/models/tiny_face_detector_model-weights_manifest.json')
+                                            .then(response => {
+                                                alert(`Network test: ${response.status} ${response.statusText}\nURL: ${response.url}\nType: ${response.headers.get('content-type')}`);
+                                            })
+                                            .catch(err => {
+                                                alert(`Network test failed: ${err.message}`);
+                                            });
+                                    }}
+                                >
+                                    Test Network
+                                </button>
+                            </div>
+                            <div className="text-xs text-gray-400 mt-2">
+                                Current URL: {window.location.href}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         );
@@ -334,26 +478,50 @@ function App() {
 
                     {/* iPhone test button */}
                     {/iPhone/i.test(navigator.userAgent) && (
-                        <button
-                            className="mt-2 bg-red-600 text-white px-2 py-1 rounded text-xs"
-                            onClick={async () => {
-                                const video = videoRef.current;
-                                if (video) {
-                                    addDebug(`Test: Video ${video.videoWidth}x${video.videoHeight}, ready: ${video.readyState}`);
-                                    try {
-                                        const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
-                                            inputSize: 320,
-                                            scoreThreshold: 0.1
-                                        }));
-                                        addDebug(`Test result: ${face ? `Face found, score: ${face.score.toFixed(3)}` : 'No face'}`);
-                                    } catch (err) {
-                                        addDebug(`Test error: ${err instanceof Error ? err.message : 'Unknown'}`);
+                        <div className="mt-2 space-x-2">
+                            <button
+                                className="bg-red-600 text-white px-2 py-1 rounded text-xs"
+                                onClick={async () => {
+                                    const video = videoRef.current;
+                                    if (video) {
+                                        addDebug(`Test: Video ${video.videoWidth}x${video.videoHeight}, ready: ${video.readyState}`);
+                                        try {
+                                            const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
+                                                inputSize: 320,
+                                                scoreThreshold: 0.1
+                                            }));
+                                            addDebug(`Test result: ${face ? `Face found, score: ${face.score.toFixed(3)}` : 'No face'}`);
+                                        } catch (err) {
+                                            addDebug(`Test error: ${err instanceof Error ? err.message : 'Unknown'}`);
+                                        }
                                     }
-                                }
-                            }}
-                        >
-                            Test Detection
-                        </button>
+                                }}
+                            >
+                                Test Detection
+                            </button>
+                            <button
+                                className="bg-green-600 text-white px-2 py-1 rounded text-xs"
+                                onClick={async () => {
+                                    addDebug('Testing model file accessibility...');
+                                    const modelFiles = [
+                                        'tiny_face_detector_model-weights_manifest.json',
+                                        'face_landmark_68_model-weights_manifest.json',
+                                        'face_recognition_model-weights_manifest.json'
+                                    ];
+
+                                    for (const file of modelFiles.slice(0, 1)) { // Test just one file to avoid spam
+                                        try {
+                                            const response = await fetch(`/models/${file}`, { cache: 'no-cache' });
+                                            addDebug(`${file}: ${response.status} (${response.headers.get('content-length')} bytes)`);
+                                        } catch (err) {
+                                            addDebug(`${file}: FAILED - ${err instanceof Error ? err.message : 'Unknown'}`);
+                                        }
+                                    }
+                                }}
+                            >
+                                Test Models
+                            </button>
+                        </div>
                     )}
                 </div>
             )}
