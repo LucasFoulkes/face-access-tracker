@@ -128,7 +128,6 @@ function App() {
 
     // Add debug state for mobile debugging
     const [debugInfo, setDebugInfo] = useState<string[]>([]);
-    const [deviceInfo, setDeviceInfo] = useState('');
 
     const addDebug = (message: string) => {
         setDebugInfo(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${message}`]);
@@ -140,7 +139,6 @@ function App() {
         const isIPhone = /iPhone/i.test(userAgent);
         const isSafari = /Safari/i.test(userAgent) && !/Chrome/i.test(userAgent);
         const info = `${isIPhone ? 'iPhone' : 'Other'} - ${isSafari ? 'Safari' : 'Other Browser'}`;
-        setDeviceInfo(info);
         addDebug(`Device: ${info}`);
     }, []);
 
@@ -477,16 +475,6 @@ function App() {
                 className="w-full h-full object-cover"
                 style={{ display: 'block', transform: 'scaleX(-1)' }}
             />
-
-            {/* Debug overlay - only show when no result */}
-            {!result && !showNewFaceDialog && (
-                <div className="absolute top-2 left-2 right-2 bg-black/70 text-white text-xs p-2 rounded max-h-40 overflow-y-auto z-10">
-                    <div className="font-bold mb-1">Status ({deviceInfo}):</div>
-                    {debugInfo.slice(-3).map((info, i) => (
-                        <div key={i}>{info}</div>
-                    ))}
-                </div>
-            )}
 
             {result && (
                 <div
