@@ -224,76 +224,77 @@ function App() {
 
         let detectionCount = 0;
         let lastFaceTime = 0;
+        let isDetecting = false; // Prevent overlapping detections
         const isIPhone = /iPhone/i.test(navigator.userAgent);
 
         const detect = async () => {
             const video = videoRef.current;
-            if (!video?.videoWidth || !video?.videoHeight) {
-                return requestAnimationFrame(detect);
+            if (!video?.videoWidth || !video?.videoHeight || isDetecting) {
+                setTimeout(() => requestAnimationFrame(detect), isIPhone ? 200 : 50);
+                return;
             }
+
+            isDetecting = true; // Set detection in progress
 
             detectionCount++;
             if (detectionCount === 1) {
                 addDebug('Starting face detection loop');
             }
-            if (detectionCount % 30 === 0) { // Show every 30th detection for more frequent updates
+            if (detectionCount % 30 === 0) {
                 addDebug(`Detection attempt #${detectionCount}`);
             }
 
             try {
-                // iPhone-optimized detection options
-                const options = new faceapi.TinyFaceDetectorOptions({
-                    inputSize: isIPhone ? 320 : 416,  // Smaller input for iPhone
-                    scoreThreshold: isIPhone ? 0.1 : 0.3  // Much lower threshold for iPhone
-                });
-
-                // Only log occasionally to avoid performance issues
-                if (detectionCount === 1) {
-                    addDebug(`Using inputSize: ${options.inputSize}, threshold: ${options.scoreThreshold}`);
-                }
-
-                const face = await faceapi.detectSingleFace(video, options)
+                // Use EXACTLY the same options as manual detection
+                const face = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({
+                    inputSize: 320,
+                    scoreThreshold: 0.1
+                }))
                     .withFaceLandmarks()
                     .withFaceDescriptor();
 
                 if (face) {
                     const now = Date.now();
-                    if (now - lastFaceTime > 2000) { // Less frequent face detection messages
-                        addDebug(`Face detected! Score: ${face.detection.score.toFixed(3)}, Descriptor: ${face.descriptor.length}`);
+                    if (now - lastFaceTime > 2000) {
+                        addDebug(`Auto: Face found! Score: ${face.detection.score.toFixed(3)}`);
                         lastFaceTime = now;
                     }
 
                     const worker = await findWorkerByFace(face.descriptor);
                     if (worker) {
-                        addDebug(`Worker found: ${worker.nombres}`);
+                        addDebug(`Auto: Worker found: ${worker.nombres}`);
                         setRecognizedWorker(worker);
                         setResult(`${worker.nombres} ${worker.apellidos}`);
                         setCountdown(3);
+                        isDetecting = false;
                         // Detection stops here - result is set
                         return;
                     } else {
-                        addDebug('Face not in database - showing dialog');
+                        addDebug('Auto: Face not in database - showing dialog');
                         // Face not recognized - show dialog and stop detection
                         setCurrentFace(face.descriptor);
                         setShowNewFaceDialog(true);
+                        isDetecting = false;
                         // Detection stops here - dialog is shown
                         return;
                     }
                 } else {
                     // Reduce logging frequency dramatically to improve performance
                     if (detectionCount % 200 === 0) {
-                        addDebug('No face detected in frame');
+                        addDebug('Auto: No face detected in frame');
                     }
                 }
             } catch (error) {
                 // Reduce error logging frequency to improve performance
                 if (detectionCount % 100 === 0) {
-                    addDebug(`Detection error: ${error instanceof Error ? error.message : 'Unknown'}`);
+                    addDebug(`Auto error: ${error instanceof Error ? error.message : 'Unknown'}`);
                 }
             }
 
+            isDetecting = false; // Reset detection flag
+
             // Add longer delay for iPhone to prevent overwhelming the device
-            const delay = isIPhone ? 200 : 50; // Increased delay for iPhone
+            const delay = isIPhone ? 300 : 100; // Even longer delay for iPhone
             setTimeout(() => requestAnimationFrame(detect), delay);
         };
 
