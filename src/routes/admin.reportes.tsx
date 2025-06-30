@@ -88,15 +88,16 @@ function Reportes() {
                 size="sm"
                 onClick={handleUpdateData}
                 disabled={isUpdating}
-                className="fixed top-4 right-4 z-50 flex items-center gap-2"
+                className="fixed top-2 right-2 z-50 flex items-center gap-1 text-xs px-2 py-1 sm:top-4 sm:right-4 sm:gap-2 sm:text-sm sm:px-3 sm:py-2"
             >
-                <RefreshCw className={`h-4 w-4 ${isUpdating ? 'animate-spin' : ''}`} />
-                {isUpdating ? 'Actualizando...' : 'Actualizar'}
+                <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 ${isUpdating ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">{isUpdating ? 'Actualizando...' : 'Actualizar'}</span>
+                <span className="sm:hidden">{isUpdating ? '...' : '↻'}</span>
             </Button>
 
-            <div className="flex justify-between items-center p-4 border-b border-zinc-200">
+            <div className="flex flex-col gap-4 p-4 border-b border-zinc-200 sm:flex-row sm:justify-between sm:items-center">
                 <h2 className="text-lg font-semibold">Reporte de Asistencia</h2>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
                     <div className="relative">
                         <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input
@@ -104,19 +105,21 @@ function Reportes() {
                             placeholder="Filtrar trabajadores..."
                             value={workerFilter}
                             onChange={(e) => setWorkerFilter(e.target.value)}
-                            className="pl-8 w-64"
+                            className="pl-8 w-full sm:w-64"
                         />
                     </div>
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button
                                 variant="outline"
-                                className="w-64 justify-between font-normal"
+                                className="w-full sm:w-64 justify-between font-normal"
                             >
-                                {range?.from && range?.to
-                                    ? `${range.from.toLocaleDateString()} - ${range.to.toLocaleDateString()}`
-                                    : "Todos los registros"}
-                                <CalendarIcon className="h-4 w-4" />
+                                <span className="truncate">
+                                    {range?.from && range?.to
+                                        ? `${range.from.toLocaleDateString()} - ${range.to.toLocaleDateString()}`
+                                        : "Filtrar fecha"}
+                                </span>
+                                <CalendarIcon className="h-4 w-4 flex-shrink-0 ml-2" />
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto overflow-hidden p-0" align="end">
@@ -151,67 +154,73 @@ function Reportes() {
 
             <div className='border border-zinc-100 rounded-lg m-4 flex-1 flex flex-col overflow-hidden'>
                 <div className='overflow-auto flex-1 scrollbar-hide'>
-                    <table className='w-full border-collapse'>
-                        <thead className='bg-zinc-100 sticky top-0 z-10'>
-                            <tr>
-                                <th className="px-4 py-2 text-left capitalize font-medium">
-                                    Fecha
-                                </th>
-                                {filteredAttendanceData.length > 0 ? (
-                                    filteredAttendanceData.map(worker => (
-                                        <th key={worker.workerId} className="px-4 py-2 text-center capitalize font-medium">
-                                            {worker.workerName}
-                                        </th>
-                                    ))
-                                ) : (
-                                    <th className="px-4 py-2 text-center capitalize font-medium text-gray-400">
-                                        {workerFilter ? 'Sin coincidencias' : 'Sin asistencias'}
+                    <div className="min-w-full overflow-x-auto">
+                        <table className='w-full border-collapse min-w-max'>
+                            <thead className='bg-zinc-100 sticky top-0 z-10'>
+                                <tr>
+                                    <th className="px-2 py-2 text-left capitalize font-medium min-w-24 sm:px-4">
+                                        Fecha
                                     </th>
-                                )}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {weekDays.map((day) => (
-                                <tr key={day}>
-                                    <td className='border-b border-gray-200 px-4 py-2 text-left font-medium'>
-                                        {formatDate(day)}
-                                    </td>
                                     {filteredAttendanceData.length > 0 ? (
-                                        filteredAttendanceData.map(worker => {
-                                            const dayData = worker.dailyData[day]
-                                            return (
-                                                <td key={worker.workerId} className={`border-b border-gray-200 px-4 py-2 text-center ${dayData?.isSingleDetection ? 'bg-red-200' : ''}`}>
-                                                    {dayData ? (
-                                                        <div className="text-sm">
-                                                            <div className="text-green-700 font-medium">
-                                                                {dayData.firstDetection}
-                                                            </div>
-                                                            <div className="text-green-600 text-xs">
-                                                                {dayData.lastDetection}
-                                                            </div>
-                                                            <div className="text-gray-600 text-xs">
-                                                                {dayData.totalTime}
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-gray-400 text-sm">
-                                                            —
-                                                        </div>
-                                                    )}
-                                                </td>
-                                            )
-                                        })
+                                        filteredAttendanceData.map(worker => (
+                                            <th key={worker.workerId} className="px-2 py-2 text-center capitalize font-medium min-w-32 sm:px-4">
+                                                <div className="truncate max-w-24 sm:max-w-none" title={worker.workerName}>
+                                                    {worker.workerName}
+                                                </div>
+                                            </th>
+                                        ))
                                     ) : (
-                                        <td className='border-b border-gray-200 px-4 py-2 text-center'>
-                                            <div className="text-gray-400 text-sm">
-                                                —
-                                            </div>
-                                        </td>
+                                        <th className="px-2 py-2 text-center capitalize font-medium text-gray-400 sm:px-4">
+                                            {workerFilter ? 'Sin coincidencias' : 'Sin asistencias'}
+                                        </th>
                                     )}
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {weekDays.map((day) => (
+                                    <tr key={day}>
+                                        <td className='border-b border-gray-200 px-2 py-2 text-left font-medium min-w-24 sm:px-4'>
+                                            <div className="text-xs sm:text-sm">
+                                                {formatDate(day)}
+                                            </div>
+                                        </td>
+                                        {filteredAttendanceData.length > 0 ? (
+                                            filteredAttendanceData.map(worker => {
+                                                const dayData = worker.dailyData[day]
+                                                return (
+                                                    <td key={worker.workerId} className={`border-b border-gray-200 px-2 py-2 text-center min-w-32 sm:px-4 ${dayData?.isSingleDetection ? 'bg-red-200' : ''}`}>
+                                                        {dayData ? (
+                                                            <div className="text-xs sm:text-sm">
+                                                                <div className="text-green-700 font-medium">
+                                                                    {dayData.firstDetection}
+                                                                </div>
+                                                                <div className="text-green-600 text-xs">
+                                                                    {dayData.lastDetection}
+                                                                </div>
+                                                                <div className="text-gray-600 text-xs">
+                                                                    {dayData.totalTime}
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-gray-400 text-xs sm:text-sm">
+                                                                —
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                )
+                                            })
+                                        ) : (
+                                            <td className='border-b border-gray-200 px-2 py-2 text-center sm:px-4'>
+                                                <div className="text-gray-400 text-xs sm:text-sm">
+                                                    —
+                                                </div>
+                                            </td>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
