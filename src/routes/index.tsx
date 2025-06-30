@@ -216,8 +216,8 @@ function App() {
                 autoPlay
                 playsInline
                 muted
-                width="1280"
-                height="720"
+                // width="1280"
+                // height="720"
                 className="max-w-full max-h-full object-cover"
                 style={{ display: 'block', transform: 'scaleX(-1)' }}
             />
